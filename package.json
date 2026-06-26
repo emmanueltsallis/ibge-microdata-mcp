@@ -1,0 +1,54 @@
+{
+  "name": "ibge-microdata-mcp-server",
+  "version": "0.1.0",
+  "description": "Local-first MCP server for discovering, caching, and analyzing official IBGE microdata.",
+  "type": "module",
+  "main": "dist/index.js",
+  "packageManager": "pnpm@11.7.0",
+  "bin": {
+    "ibge-microdata-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:smoke": "vitest run tests/smoke.test.ts",
+    "dev": "tsc && node dist/index.js"
+  },
+  "dependencies": {
+    "@duckdb/node-api": "1.5.4-r.1",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "xlsx": "^0.18.5",
+    "yauzl": "^3.4.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/yauzl": "^3.4.0",
+    "typescript": "^5.3.3",
+    "vitest": "^4.0.17"
+  },
+  "engines": {
+    "node": ">=18.20.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/emmanueltsallis/ibge-microdata-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/emmanueltsallis/ibge-microdata-mcp/issues"
+  },
+  "homepage": "https://github.com/emmanueltsallis/ibge-microdata-mcp#readme",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "ibge",
+    "microdata",
+    "pnad",
+    "pof",
+    "duckdb",
+    "parquet",
+    "brazil",
+    "statistics"
+  ],
+  "license": "MIT"
+}

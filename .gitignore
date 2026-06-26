@@ -1,0 +1,4 @@
+node_modules/
+dist/
+.ibge-cache/
+.DS_Store
