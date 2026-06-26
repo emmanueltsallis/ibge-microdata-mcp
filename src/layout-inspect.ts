@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 
-import { parseSasInputLayout, type LayoutVariable } from "./layout.js";
+import { parseSasInputLayout, type LayoutVariable, type ValueLabel } from "./layout.js";
 
 export interface InspectLayoutInput {
   layoutPath: string;
@@ -13,7 +13,10 @@ export interface InspectLayoutVariable {
   start: number;
   width: number;
   type: LayoutVariable["type"];
+  format?: string;
+  decimals?: number;
   description: string;
+  categories: ValueLabel[];
 }
 
 export interface InspectLayoutOutput {
@@ -55,7 +58,10 @@ function toInspectVariable(variable: LayoutVariable): InspectLayoutVariable {
     start: variable.start,
     width: variable.width,
     type: variable.type,
+    ...(variable.format === undefined ? {} : { format: variable.format }),
+    ...(variable.decimals === undefined ? {} : { decimals: variable.decimals }),
     description: variable.description,
+    categories: variable.categories ?? [],
   };
 }
 

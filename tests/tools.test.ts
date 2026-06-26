@@ -11,6 +11,7 @@ import {
   connectivityCheckTool,
   describeParquetViewsTool,
   discoverMicrodataTool,
+  discoverMetadataTool,
   downloadFileTool,
   extractZipEntryTool,
   fixedWidthFileToParquetTool,
@@ -20,6 +21,8 @@ import {
   listDirectoryTool,
   listFilesTool,
   listSurveysTool,
+  metadataInventoryTool,
+  metadataSearchTool,
   pnadcAnalyzeFileTool,
   pnadcAnalyzeZipTool,
   pnadcRDownloadTool,
@@ -147,6 +150,29 @@ describe("discoverMicrodataTool", () => {
 
     expect(result.structured.matches.map((match) => match.name)).toEqual(["Microdados", "Dados.zip"]);
     expect(result.markdown).toContain("IBGE Microdata Discovery");
+    expect(result.markdown).toContain("roles=data_file");
+  });
+});
+
+describe("discoverMetadataTool", () => {
+  it("wraps bounded official FTP metadata discovery", async () => {
+    const pages: Record<string, string> = {
+      "https://ftp.ibge.gov.br/root/": '<a href="Pesquisa_A/">Pesquisa A</a>',
+      "https://ftp.ibge.gov.br/root/Pesquisa_A/": '<a href="Documentacao.zip">Documentacao</a><a href="Dados.zip">Dados</a>',
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => new Response(pages[url] ?? "", { status: pages[url] ? 200 : 404 }))
+    );
+
+    const result = await discoverMetadataTool({
+      rootUrl: "https://ftp.ibge.gov.br/root/",
+      maxDepth: 2,
+      maxDirectories: 10
+    });
+
+    expect(result.structured.matches.map((match) => match.name)).toEqual(["Documentacao.zip"]);
+    expect(result.markdown).toContain("IBGE Metadata Discovery");
   });
 });
 
@@ -175,10 +201,48 @@ describe("inspectLayoutTool", () => {
         start: 18,
         width: 8,
         type: "number",
-        description: "Rendimento habitual"
+        format: "8.",
+        description: "Rendimento habitual",
+        categories: []
       }
     ]);
     expect(result.markdown).toContain("IBGE Fixed-Width Layout Variables");
+  });
+});
+
+describe("metadata tools", () => {
+  it("wraps metadata inventory and variable search for local layouts", async () => {
+    const layoutPath = path.join(tempDir, "input.txt");
+    await writeFile(
+      layoutPath,
+      `
+proc format;
+value $UFFMT
+  '11' = 'Rondônia'
+;
+@0001 UF      $CHAR2.
+@0003 V1028   15.   /* Peso */
+format UF $UFFMT.;
+`
+    );
+
+    const inventory = await metadataInventoryTool({
+      paths: [layoutPath],
+      variableLimit: 10
+    });
+    expect(inventory.structured.parsedSources).toBe(1);
+    expect(inventory.structured.records[0].variables[0]).toMatchObject({
+      name: "UF",
+      categories: [{ value: "11", label: "Rondônia" }]
+    });
+    expect(inventory.markdown).toContain("IBGE Metadata Inventory");
+
+    const search = await metadataSearchTool({
+      paths: [layoutPath],
+      query: "rondonia"
+    });
+    expect(search.structured.matches.map((match) => match.variable.name)).toEqual(["UF"]);
+    expect(search.markdown).toContain("IBGE Metadata Variable Search");
   });
 });
 

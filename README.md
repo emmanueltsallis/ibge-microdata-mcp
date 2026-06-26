@@ -28,6 +28,7 @@ In plain terms:
 | `ibge_microdata_list_files` | List known public archive files for supported survey families. |
 | `ibge_microdata_list_directory` | List any official `ftp.ibge.gov.br` directory. |
 | `ibge_microdata_discover` | Bounded crawl of official IBGE directories to find microdata, data, documentation, and layout files. |
+| `ibge_microdata_discover_metadata` | Bounded crawl focused on likely dictionary, layout, input, codebook, and documentation files. |
 | `ibge_microdata_file_info` | Read file size, type, update timestamp, and validators with HTTP HEAD. |
 | `ibge_microdata_download_file` | Download or reuse one official IBGE file in a local cache. |
 | `ibge_microdata_list_cache` | List files already downloaded into a local cache with URLs, paths, sizes, and timestamps. |
@@ -35,6 +36,8 @@ In plain terms:
 | `ibge_microdata_zip_entries` | List files inside a local ZIP archive without extracting all of it. |
 | `ibge_microdata_extract_zip_entry` | Extract one selected ZIP entry to a local path. |
 | `ibge_microdata_inspect_layout` | Parse a local IBGE fixed-width input layout and search variables. |
+| `ibge_microdata_metadata_inventory` | Parse local dictionaries/layouts or documentation ZIPs into records, variables, positions, types, and value labels. |
+| `ibge_microdata_search_variables` | Search local official metadata for variable names, descriptions, and parsed value labels/categories. |
 | `ibge_microdata_fixed_width_file_to_parquet` | Convert a fixed-width TXT file plus official layout into a local Parquet file. |
 | `ibge_microdata_fixed_width_zip_to_parquet` | Convert one fixed-width TXT entry inside a ZIP directly into local Parquet. |
 | `ibge_microdata_query_parquet` | Run bounded read-only DuckDB SQL over local Parquet files exposed as `microdata`. |
@@ -45,7 +48,7 @@ In plain terms:
 | `ibge_microdata_validate_recipe` | Validate a versioned JSON harmonization recipe without writing output. |
 | `ibge_microdata_apply_recipe` | Apply a versioned JSON harmonization recipe and write a derived Parquet file. |
 
-The generic path is discovery, caching, layout inspection, Parquet conversion, profiling, and DuckDB querying. These tools are the main public surface of the server.
+The generic path is discovery, caching, official metadata inspection/search, Parquet conversion, profiling, and DuckDB querying. These tools are the main public surface of the server.
 
 ## Optional Survey-Specific Helpers
 
@@ -213,6 +216,14 @@ ibge_microdata_discover({
 })
 ```
 
+```text
+ibge_microdata_discover_metadata({
+  "rootUrl": "https://ftp.ibge.gov.br/",
+  "maxDepth": 4,
+  "maxDirectories": 100
+})
+```
+
 2. Inspect file metadata before downloading:
 
 ```text
@@ -265,7 +276,27 @@ ibge_microdata_zip_entries({
 })
 ```
 
-7. Inspect a fixed-width layout and choose variables:
+7. Inventory official metadata and search variables:
+
+```text
+ibge_microdata_metadata_inventory({
+  "zipPaths": ["/Users/you/.cache/ibge-microdata-mcp/ftp.ibge.gov.br/path/to/public/documentation.zip"],
+  "search": "weight",
+  "variableLimit": 50
+})
+```
+
+```text
+ibge_microdata_search_variables({
+  "zipPaths": ["/Users/you/.cache/ibge-microdata-mcp/ftp.ibge.gov.br/path/to/public/documentation.zip"],
+  "query": "rendimento",
+  "limit": 50
+})
+```
+
+The metadata tools parse official SAS/TXT input layouts and POF-style Excel dictionaries. When available, they return value labels/categories such as state codes or response categories.
+
+8. Inspect a fixed-width layout directly when you already have the layout file:
 
 ```text
 ibge_microdata_inspect_layout({
@@ -275,7 +306,7 @@ ibge_microdata_inspect_layout({
 })
 ```
 
-8. Convert selected variables to Parquet:
+9. Convert selected variables to Parquet:
 
 ```text
 ibge_microdata_fixed_width_zip_to_parquet({
@@ -287,7 +318,7 @@ ibge_microdata_fixed_width_zip_to_parquet({
 })
 ```
 
-9. Profile the Parquet file before writing custom SQL:
+10. Profile the Parquet file before writing custom SQL:
 
 ```text
 ibge_microdata_profile_parquet_views({
@@ -305,7 +336,7 @@ ibge_microdata_profile_parquet_views({
 
 If `columns` is omitted, the tool profiles the first 25 columns by default. This keeps wide microdata files manageable while still giving enough information to choose variables and write queries.
 
-10. Query the Parquet file with DuckDB:
+11. Query the Parquet file with DuckDB:
 
 ```text
 ibge_microdata_query_parquet({
@@ -465,7 +496,8 @@ The R smoke test checks `Rscript` and baseline R package availability. It does n
 
 - This is a local-first MCP server, not a hosted warehouse of all IBGE microdata.
 - Discovery is deliberately bounded; broad root crawls should use explicit `maxDepth` and `maxDirectories` values to avoid excessive requests.
-- Generic fixed-width conversion, Parquet profiling/querying, weighted distribution summaries, and POF dictionary conversion are implemented.
+- Generic fixed-width conversion, official metadata inventory/search, Parquet profiling/querying, weighted distribution summaries, and POF dictionary conversion are implemented.
+- Metadata parsing supports common IBGE SAS/TXT input layouts and POF-style Excel dictionaries. Other survey-specific dictionary formats may still need parser adapters.
 - Additional survey-specific harmonized recipes can be added as optional layers without changing the generic workflow.
 
 ## License

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { discoverMicrodataFiles } from "../src/discovery.js";
+import { discoverMetadataFiles, discoverMicrodataFiles } from "../src/discovery.js";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -33,6 +33,35 @@ describe("discoverMicrodataFiles", () => {
       "https://ftp.ibge.gov.br/root/Pesquisa_A/Microdados/Dados.zip",
       "https://ftp.ibge.gov.br/root/Pesquisa_A/Microdados/Documentacao.zip",
     ]);
+    expect(result.matches.map((match) => match.roles)).toEqual([
+      ["microdata_directory"],
+      ["data_file"],
+      ["documentation_archive", "metadata_file"],
+    ]);
+    expect(result.matches[2].metadataKind).toBe("documentation");
+  });
+
+  it("returns only dictionary/layout/documentation candidates for metadata discovery", async () => {
+    const pages: Record<string, string> = {
+      "https://ftp.ibge.gov.br/root/": '<a href="Pesquisa_A/">Pesquisa A</a>',
+      "https://ftp.ibge.gov.br/root/Pesquisa_A/":
+        '<a href="Microdados/">Microdados</a><a href="Dicionario_variaveis.xls">Dicionario</a>',
+      "https://ftp.ibge.gov.br/root/Pesquisa_A/Microdados/":
+        '<a href="Dados.zip">Dados</a><a href="Layout.txt">Layout</a>',
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => new Response(pages[url] ?? "", { status: pages[url] ? 200 : 404 }))
+    );
+
+    const result = await discoverMetadataFiles({
+      rootUrl: "https://ftp.ibge.gov.br/root/",
+      maxDepth: 3,
+      maxDirectories: 10,
+    });
+
+    expect(result.matches.map((match) => match.name)).toEqual(["Dicionario_variaveis.xls", "Layout.txt"]);
+    expect(result.matches.every((match) => match.roles.includes("metadata_file"))).toBe(true);
   });
 
   it("stops crawling when maxDirectories is reached", async () => {

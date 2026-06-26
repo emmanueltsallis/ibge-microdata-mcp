@@ -8,6 +8,7 @@ import {
   connectivityCheckTool,
   describeParquetViewsTool,
   discoverMicrodataTool,
+  discoverMetadataTool,
   listFilesTool,
   listDirectoryTool,
   listSurveysTool,
@@ -17,6 +18,8 @@ import {
   fixedWidthFileToParquetTool,
   fixedWidthZipToParquetTool,
   inspectLayoutTool,
+  metadataInventoryTool,
+  metadataSearchTool,
   pnadcAnalyzeFileTool,
   pnadcAnalyzeZipTool,
   pnadcRDownloadTool,
@@ -119,6 +122,65 @@ const discoverMicrodataSchema = z.object({
     .optional()
     .describe("Whether to include documentation, dictionary, layout, and input files in matches. Defaults to true."),
 });
+
+const metadataInventorySchema = z.object({
+  paths: z
+    .array(z.string().min(1))
+    .optional()
+    .describe("Optional local dictionary/layout files to inspect, such as .txt, .sas, .xls, or .xlsx."),
+  zipPaths: z
+    .array(z.string().min(1))
+    .optional()
+    .describe("Optional local documentation ZIP files to scan for dictionary/layout entries."),
+  search: z
+    .string()
+    .min(1)
+    .optional()
+    .describe("Optional case-insensitive search over variable names, descriptions, and value labels."),
+  variableLimit: z
+    .number()
+    .int()
+    .positive()
+    .max(1000)
+    .optional()
+    .describe("Maximum variables to return per record. Defaults to 100 and is capped at 1000."),
+  recordLimit: z
+    .number()
+    .int()
+    .positive()
+    .max(1000)
+    .optional()
+    .describe("Maximum records to return across all metadata sources. Defaults to 200 and is capped at 1000."),
+  includeCategories: z
+    .boolean()
+    .optional()
+    .describe("Whether to include value labels/categories when parsed. Defaults to true."),
+  includeEmptySources: z
+    .boolean()
+    .optional()
+    .describe("Whether to return skipped/error source summaries. Defaults to true."),
+  maxZipEntries: z
+    .number()
+    .int()
+    .positive()
+    .max(1000)
+    .optional()
+    .describe("Maximum candidate entries to inspect inside each ZIP. Defaults to 200 and is capped at 1000."),
+});
+
+const metadataSearchSchema = metadataInventorySchema.extend({
+  query: z
+    .string()
+    .min(1)
+    .describe("Search text for variable name, description, or parsed value labels/categories."),
+  limit: z
+    .number()
+    .int()
+    .positive()
+    .max(1000)
+    .optional()
+    .describe("Maximum variable matches to return. Defaults to 100 and is capped at 1000."),
+}).omit({ search: true });
 
 const inspectLayoutSchema = z.object({
   layoutPath: z
@@ -736,6 +798,19 @@ Use this when a survey-specific convenience listing is not implemented yet. The 
   );
 
   server.registerTool(
+    "ibge_microdata_discover_metadata",
+    {
+      title: "Discover Official IBGE Metadata Files",
+      description: `Crawl official ftp.ibge.gov.br directories with strict limits and return likely dictionary, layout, input, codebook, and documentation files.
+
+Use this before downloading documentation archives for a survey that does not yet have a convenience listing. The tool only fetches directory pages; it does not download microdata or documentation files.`,
+      inputSchema: discoverMicrodataSchema.shape,
+      annotations: READ_ONLY,
+    },
+    async (args) => toMcpResult(await discoverMetadataTool(args))
+  );
+
+  server.registerTool(
     "ibge_microdata_inspect_layout",
     {
       title: "Inspect IBGE Fixed-Width Layout",
@@ -746,6 +821,32 @@ Use this before converting fixed-width microdata to Parquet so you can choose se
       annotations: READ_ONLY,
     },
     async (args) => toMcpResult(await inspectLayoutTool(args))
+  );
+
+  server.registerTool(
+    "ibge_microdata_metadata_inventory",
+    {
+      title: "Inventory IBGE Dictionary Layouts",
+      description: `Parse local official IBGE dictionary/layout files, or scan local documentation ZIPs, and return records, variables, fixed-width positions, types, descriptions, and parsed value labels/categories.
+
+Use this after downloading or extracting official documentation. It is generic: it supports SAS/TXT input layouts and POF-style Excel dictionaries without assuming a specific empirical use case.`,
+      inputSchema: metadataInventorySchema.shape,
+      annotations: READ_ONLY,
+    },
+    async (args) => toMcpResult(await metadataInventoryTool(args))
+  );
+
+  server.registerTool(
+    "ibge_microdata_search_variables",
+    {
+      title: "Search IBGE Dictionary Variables",
+      description: `Search across local official IBGE dictionary/layout files or documentation ZIPs for variable names, descriptions, and parsed value labels/categories.
+
+Use this when choosing selectedVariables for conversion, finding survey weights, identifying join keys, or locating candidate variables before querying microdata.`,
+      inputSchema: metadataSearchSchema.shape,
+      annotations: READ_ONLY,
+    },
+    async (args) => toMcpResult(await metadataSearchTool(args))
   );
 
   server.registerTool(

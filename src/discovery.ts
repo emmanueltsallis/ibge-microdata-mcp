@@ -8,11 +8,19 @@ export interface DiscoverMicrodataInput {
   includeDocumentation?: boolean;
 }
 
+export type MicrodataDiscoveryRole =
+  | "microdata_directory"
+  | "data_file"
+  | "metadata_file"
+  | "documentation_archive";
+
 export interface MicrodataDiscoveryMatch {
   name: string;
   url: string;
   kind: DirectoryEntry["kind"];
   depth: number;
+  roles: MicrodataDiscoveryRole[];
+  metadataKind?: string;
   matchedBecause: string[];
 }
 
@@ -64,15 +72,17 @@ export async function discoverMicrodataFiles(input: DiscoverMicrodataInput = {})
     const entries = await fetchDirectoryEntries(current.url);
     for (const entry of entries) {
       const depth = current.depth + 1;
-      const reasons = matchReasons(entry, depth, includeDocumentation);
-      if (depth <= maxDepth && reasons.length > 0 && !seenMatches.has(entry.url)) {
+      const match = classifyDiscoveryEntry(entry, depth, includeDocumentation);
+      if (depth <= maxDepth && match.matchedBecause.length > 0 && !seenMatches.has(entry.url)) {
         seenMatches.add(entry.url);
         matches.push({
           name: entry.name,
           url: entry.url,
           kind: entry.kind,
           depth,
-          matchedBecause: reasons,
+          roles: match.roles,
+          ...(match.metadataKind === null ? {} : { metadataKind: match.metadataKind }),
+          matchedBecause: match.matchedBecause,
         });
       }
 
@@ -92,26 +102,88 @@ export async function discoverMicrodataFiles(input: DiscoverMicrodataInput = {})
   };
 }
 
-function matchReasons(entry: DirectoryEntry, depth: number, includeDocumentation: boolean): string[] {
-  const reasons: string[] = [];
+export async function discoverMetadataFiles(input: DiscoverMicrodataInput = {}): Promise<DiscoverMicrodataOutput> {
+  const result = await discoverMicrodataFiles({ ...input, includeDocumentation: true });
+  const matches = result.matches.filter((match) =>
+    match.roles.some((role) => role === "metadata_file" || role === "documentation_archive")
+  );
+  return {
+    ...result,
+    matches,
+  };
+}
+
+function classifyDiscoveryEntry(
+  entry: DirectoryEntry,
+  depth: number,
+  includeDocumentation: boolean
+): { matchedBecause: string[]; roles: MicrodataDiscoveryRole[]; metadataKind: string | null } {
+  const matchedBecause: string[] = [];
+  const roles: MicrodataDiscoveryRole[] = [];
   const normalizedUrl = normalizeText(entry.url);
   const normalizedName = normalizeText(entry.name);
   const underMicrodataDirectory = normalizedUrl.includes("/microdados/");
 
   if (entry.kind === "directory" && normalizedName.includes("microdados")) {
-    reasons.push("microdata_directory");
+    matchedBecause.push("microdata_directory");
+    roles.push("microdata_directory");
   }
 
   if (entry.kind === "file" && isDownloadFile(entry.name)) {
-    if (underMicrodataDirectory) reasons.push("file_under_microdata_directory");
-    if (normalizedName.includes("microdados")) reasons.push("microdata_file_name");
-    if (normalizedName.startsWith("dados") && depth > 0) reasons.push("data_file_name");
-    if (includeDocumentation && isDocumentationFileName(normalizedName)) {
-      reasons.push("documentation_file_name");
+    const metadataKind = metadataKindForName(normalizedName);
+    const documentationArchive = isDocumentationArchive(normalizedName);
+
+    if (underMicrodataDirectory && metadataKind === null && !documentationArchive) {
+      matchedBecause.push("file_under_microdata_directory");
+      roles.push("data_file");
     }
+    if (metadataKind === null && normalizedName.includes("microdados")) {
+      matchedBecause.push("microdata_file_name");
+      roles.push("data_file");
+    }
+    if (metadataKind === null && normalizedName.startsWith("dados") && depth > 0) {
+      matchedBecause.push("data_file_name");
+      roles.push("data_file");
+    }
+    if (includeDocumentation && isDocumentationFileName(normalizedName)) {
+      matchedBecause.push("documentation_file_name");
+      roles.push(documentationArchive ? "documentation_archive" : "metadata_file");
+    }
+    if (includeDocumentation && metadataKind !== null) {
+      matchedBecause.push(`${metadataKind}_file_name`);
+      roles.push("metadata_file");
+    }
+
+    return {
+      matchedBecause: unique(matchedBecause),
+      roles: unique(roles),
+      metadataKind,
+    };
   }
 
-  return reasons;
+  return {
+    matchedBecause: unique(matchedBecause),
+    roles: unique(roles),
+    metadataKind: null,
+  };
+}
+
+function metadataKindForName(normalizedName: string): string | null {
+  if (normalizedName.includes("dicionario") || normalizedName.includes("dictionary")) return "dictionary";
+  if (normalizedName.includes("layout")) return "layout";
+  if (normalizedName.includes("input")) return "input";
+  if (normalizedName.includes("codebook")) return "codebook";
+  if (normalizedName.includes("questionario")) return "questionnaire";
+  if (normalizedName.includes("documentacao")) return "documentation";
+  return null;
+}
+
+function isDocumentationArchive(normalizedName: string): boolean {
+  return normalizedName.endsWith(".zip") && isDocumentationFileName(normalizedName);
+}
+
+function unique<T>(values: T[]): T[] {
+  return [...new Set(values)];
 }
 
 function isDownloadFile(name: string): boolean {
@@ -123,8 +195,11 @@ function isDocumentationFileName(normalizedName: string): boolean {
   return (
     normalizedName.includes("documentacao") ||
     normalizedName.includes("dicionario") ||
+    normalizedName.includes("dictionary") ||
     normalizedName.includes("layout") ||
-    normalizedName.includes("input")
+    normalizedName.includes("input") ||
+    normalizedName.includes("codebook") ||
+    normalizedName.includes("questionario")
   );
 }
 

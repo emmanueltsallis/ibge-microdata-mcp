@@ -2,13 +2,22 @@ import { readFile } from "node:fs/promises";
 
 import * as XLSX from "xlsx";
 
-import type { LayoutVariable, LayoutVariableType } from "./layout.js";
+import type { LayoutVariable, LayoutVariableType, ValueLabel } from "./layout.js";
 import { exportFixedWidthZipEntryLayoutToParquet, type FixedWidthParquetOutput } from "./fixed-width-parquet.js";
 import { listZipEntries } from "./zip.js";
 
 export interface PofDictionaryManifestInput {
   dictionaryPath: string;
   dataZipPath?: string;
+  search?: string;
+  variableLimit?: number;
+}
+
+export interface PofDictionaryWorkbookManifestInput {
+  workbook: XLSX.WorkBook;
+  dictionaryPath: string;
+  dataZipPath?: string;
+  dataEntryNames?: Set<string>;
   search?: string;
   variableLimit?: number;
 }
@@ -29,6 +38,7 @@ export interface PofVariable {
   decimals: number;
   type: LayoutVariableType;
   description: string;
+  categories: ValueLabel[];
 }
 
 export interface PofRecordManifest {
@@ -73,13 +83,23 @@ export async function readPofDictionaryManifest(
 ): Promise<PofDictionaryManifest> {
   const workbook = await readWorkbook(input.dictionaryPath);
   const zipEntries = input.dataZipPath ? await listZipEntries(input.dataZipPath) : [];
-  const zipEntryNames = new Set(zipEntries.map((entry) => entry.fileName));
+  return readPofDictionaryManifestFromWorkbook({
+    ...input,
+    workbook,
+    dataEntryNames: new Set(zipEntries.map((entry) => entry.fileName)),
+  });
+}
+
+export function readPofDictionaryManifestFromWorkbook(
+  input: PofDictionaryWorkbookManifestInput
+): PofDictionaryManifest {
+  const zipEntryNames = input.dataEntryNames ?? new Set<string>();
   const search = normalizeSearch(input.search);
   const variableLimit = normalizeVariableLimit(input.variableLimit);
   const records: PofRecordManifest[] = [];
 
-  for (const sheetName of workbook.SheetNames) {
-    const variables = parsePofSheet(workbook.Sheets[sheetName]);
+  for (const sheetName of input.workbook.SheetNames) {
+    const variables = parsePofSheet(input.workbook.Sheets[sheetName]);
     if (variables.length === 0) continue;
 
     const matchingVariables = search
@@ -152,6 +172,7 @@ function parsePofSheet(sheet: XLSX.WorkSheet): PofVariable[] {
     const decimals = numberCell(cellValue(sheet, rowIndex, 2)) ?? 0;
     const name = stringCell(cellValue(sheet, rowIndex, 3));
     const description = stringCell(cellValue(sheet, rowIndex, 4));
+    const categories = parseValueLabels(stringCell(cellValue(sheet, rowIndex, 5)));
     if (start === null || width === null || name === "") continue;
 
     variables.push({
@@ -161,6 +182,7 @@ function parsePofSheet(sheet: XLSX.WorkSheet): PofVariable[] {
       decimals,
       type: inferPofVariableType(name, description, decimals),
       description,
+      categories,
     });
   }
 
@@ -205,6 +227,7 @@ function toLayoutVariable(variable: PofVariable): LayoutVariable {
     type: variable.type,
     description: variable.description,
     decimals: variable.decimals,
+    ...(variable.categories.length > 0 ? { categories: variable.categories } : {}),
   };
 }
 
@@ -247,6 +270,23 @@ function numberCell(value: string | number | undefined): number | null {
   if (text === "") return null;
   const parsed = Number.parseInt(text, 10);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseValueLabels(value: string): ValueLabel[] {
+  const text = value.replace(/[–—]/g, "-").replace(/\r\n/g, "\n").trim();
+  if (text === "") return [];
+
+  const categories: ValueLabel[] = [];
+  const pattern =
+    /(?<value>[A-Za-z0-9_.-]+)\s*(?:-|:)\s*(?<label>.*?)(?=(?:\s+|\n)[A-Za-z0-9_.-]+\s*(?:-|:)|$)/gs;
+  for (const match of text.matchAll(pattern)) {
+    const rawValue = match.groups?.value.trim() ?? "";
+    const rawLabel = match.groups?.label.trim() ?? "";
+    if (rawValue !== "" && rawLabel !== "") {
+      categories.push({ value: rawValue, label: rawLabel });
+    }
+  }
+  return categories;
 }
 
 function normalizeText(value: string): string {

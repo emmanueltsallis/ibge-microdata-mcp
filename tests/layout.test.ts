@@ -18,6 +18,7 @@ describe("parseSasInputLayout", () => {
         zeroBasedStart: 0,
         width: 4,
         type: "string",
+        format: "$4.",
         description: "Ano de referência"
       },
       {
@@ -26,6 +27,7 @@ describe("parseSasInputLayout", () => {
         zeroBasedStart: 185,
         width: 1,
         type: "string",
+        format: "$1.",
         description: "Negócio/empresa registrado no CNPJ"
       },
       {
@@ -34,6 +36,7 @@ describe("parseSasInputLayout", () => {
         zeroBasedStart: 416,
         width: 2,
         type: "string",
+        format: "$2.",
         description: "Posição na ocupação"
       },
       {
@@ -42,7 +45,49 @@ describe("parseSasInputLayout", () => {
         zeroBasedStart: 443,
         width: 8,
         type: "number",
+        format: "8.",
         description: "Rendim. habitual qq trabalho"
+      }
+    ]);
+  });
+
+  it("parses broader SAS formats, labels, decimals, and value categories", () => {
+    const input = `
+proc format;
+value $UFFMT
+  '11' = 'Rondônia'
+  '33' = 'Rio de Janeiro'
+;
+run;
+label RENDA = "Rendimento mensal deflacionado";
+@0001 UF      $CHAR2.
+@0003 RENDA   COMMA8.2
+format UF $UFFMT.;
+`;
+
+    expect(parseSasInputLayout(input)).toEqual([
+      {
+        name: "UF",
+        start: 1,
+        zeroBasedStart: 0,
+        width: 2,
+        type: "string",
+        format: "$CHAR2.",
+        description: "",
+        categories: [
+          { value: "11", label: "Rondônia" },
+          { value: "33", label: "Rio de Janeiro" }
+        ]
+      },
+      {
+        name: "RENDA",
+        start: 3,
+        zeroBasedStart: 2,
+        width: 8,
+        type: "number",
+        format: "COMMA8.2.",
+        decimals: 2,
+        description: "Rendimento mensal deflacionado"
       }
     ]);
   });

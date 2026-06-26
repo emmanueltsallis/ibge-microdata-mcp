@@ -23,9 +23,18 @@ import {
 } from "./catalog.js";
 import {
   discoverMicrodataFiles,
+  discoverMetadataFiles,
   type DiscoverMicrodataOutput,
 } from "./discovery.js";
 import { inspectLayout, type InspectLayoutOutput } from "./layout-inspect.js";
+import {
+  buildMetadataInventory,
+  searchMetadataVariables,
+  type MetadataInventoryInput,
+  type MetadataInventoryOutput,
+  type MetadataVariableSearchInput,
+  type MetadataVariableSearchOutput,
+} from "./metadata.js";
 import { summarizePnadcTextFile, type SummarizePnadcTextFileOutput } from "./pnadc-file.js";
 import { summarizePnadcZipFile, type SummarizePnadcZipFileOutput } from "./pnadc-zip.js";
 import {
@@ -120,11 +129,17 @@ export interface DiscoverMicrodataToolInput {
   includeDocumentation?: boolean;
 }
 
+export type DiscoverMetadataToolInput = DiscoverMicrodataToolInput;
+
 export interface InspectLayoutToolInput {
   layoutPath: string;
   search?: string;
   limit?: number;
 }
+
+export type MetadataInventoryToolInput = MetadataInventoryInput;
+
+export type MetadataVariableSearchToolInput = MetadataVariableSearchInput;
 
 export interface RemoteFileInfoInput {
   url: string;
@@ -320,10 +335,40 @@ export async function discoverMicrodataTool(
   };
 }
 
+export async function discoverMetadataTool(
+  input: DiscoverMetadataToolInput
+): Promise<ToolResult<DiscoverMicrodataOutput>> {
+  const result = await discoverMetadataFiles(input);
+  return {
+    markdown: formatDiscoveryMarkdown(result, "IBGE Metadata Discovery"),
+    structured: result,
+  };
+}
+
 export async function inspectLayoutTool(input: InspectLayoutToolInput): Promise<ToolResult<InspectLayoutOutput>> {
   const result = await inspectLayout(input);
   return {
     markdown: formatInspectLayoutMarkdown(result),
+    structured: result,
+  };
+}
+
+export async function metadataInventoryTool(
+  input: MetadataInventoryToolInput
+): Promise<ToolResult<MetadataInventoryOutput>> {
+  const result = await buildMetadataInventory(input);
+  return {
+    markdown: formatMetadataInventoryMarkdown(result),
+    structured: result,
+  };
+}
+
+export async function metadataSearchTool(
+  input: MetadataVariableSearchToolInput
+): Promise<ToolResult<MetadataVariableSearchOutput>> {
+  const result = await searchMetadataVariables(input);
+  return {
+    markdown: formatMetadataSearchMarkdown(result),
     structured: result,
   };
 }
@@ -624,9 +669,9 @@ function formatFilesMarkdown(title: string, sourceUrl: string, files: DirectoryE
   return lines.join("\n");
 }
 
-function formatDiscoveryMarkdown(result: DiscoverMicrodataOutput): string {
+function formatDiscoveryMarkdown(result: DiscoverMicrodataOutput, title = "IBGE Microdata Discovery"): string {
   const lines = [
-    "# IBGE Microdata Discovery",
+    `# ${title}`,
     "",
     `Root: ${result.rootUrl}`,
     `Directories visited: ${result.directoriesVisited}`,
@@ -636,9 +681,96 @@ function formatDiscoveryMarkdown(result: DiscoverMicrodataOutput): string {
   ];
 
   for (const match of result.matches) {
+    const roleText = match.roles.length > 0 ? ` roles=${match.roles.join("+")}` : "";
+    const metadataText = match.metadataKind ? ` metadata=${match.metadataKind}` : "";
     lines.push(
-      `- **${match.name}** (${match.kind}, depth ${match.depth}): ${match.url} [${match.matchedBecause.join(", ")}]`
+      `- **${match.name}** (${match.kind}, depth ${match.depth}${roleText}${metadataText}): ${match.url} [${match.matchedBecause.join(", ")}]`
     );
+  }
+
+  return lines.join("\n");
+}
+
+function formatMetadataInventoryMarkdown(result: MetadataInventoryOutput): string {
+  const lines = [
+    "# IBGE Metadata Inventory",
+    "",
+    `Sources: ${result.parsedSources} parsed of ${result.totalSources}`,
+    `Records: ${result.returnedRecords} returned of ${result.totalRecords}`,
+    `Variables: ${result.returnedVariables} returned of ${result.totalVariables}`,
+    `Truncated: ${result.truncated ? "yes" : "no"}`,
+    "",
+    "## Sources",
+  ];
+
+  for (const source of result.sources) {
+    const location = source.entryName ? `${source.path} :: ${source.entryName}` : source.path;
+    lines.push(
+      `- **${source.status}** ${source.parser}: ${location} (${source.recordCount} records, ${source.variableCount} variables)${
+        source.message ? ` - ${source.message}` : ""
+      }`
+    );
+  }
+
+  lines.push("", "## Records");
+  for (const record of result.records) {
+    const location = record.entryName ? `${record.sourcePath} :: ${record.entryName}` : record.sourcePath;
+    lines.push(
+      `- **${record.recordName}** (${record.parser}): ${record.returnedVariables}/${record.variableCount} variables, record length ${record.recordLength}`
+    );
+    lines.push(`  - Source: ${location}`);
+    if (record.dataEntryName) lines.push(`  - Data entry: ${record.dataEntryName}`);
+    for (const variable of record.variables) {
+      const categories =
+        variable.categories.length > 0
+          ? `; categories=${variable.categories
+              .slice(0, 5)
+              .map((category) => `${category.value}=${category.label}`)
+              .join(", ")}${variable.categories.length > 5 ? ", ..." : ""}`
+          : "";
+      lines.push(
+        `  - ${variable.name} (${variable.type}, ${variable.start}-${variable.end}, width ${variable.width}${
+          variable.decimals === undefined ? "" : `, decimals ${variable.decimals}`
+        }): ${variable.description}${categories}`
+      );
+    }
+  }
+
+  if (result.warnings.length > 0) {
+    lines.push("", "## Warnings", ...result.warnings.map((warning) => `- ${warning}`));
+  }
+
+  return lines.join("\n");
+}
+
+function formatMetadataSearchMarkdown(result: MetadataVariableSearchOutput): string {
+  const lines = [
+    "# IBGE Metadata Variable Search",
+    "",
+    `Query: ${result.query}`,
+    `Matches: ${result.returnedMatches} returned of ${result.totalMatches}`,
+    `Truncated: ${result.truncated ? "yes" : "no"}`,
+    "",
+  ];
+
+  for (const match of result.matches) {
+    const location = match.entryName ? `${match.sourcePath} :: ${match.entryName}` : match.sourcePath;
+    const categories =
+      match.variable.categories.length > 0
+        ? `; categories=${match.variable.categories
+            .slice(0, 5)
+            .map((category) => `${category.value}=${category.label}`)
+            .join(", ")}${match.variable.categories.length > 5 ? ", ..." : ""}`
+        : "";
+    lines.push(
+      `- **${match.variable.name}** in ${match.recordName} (${match.parser}, ${match.variable.start}-${match.variable.end}): ${match.variable.description}${categories}`
+    );
+    lines.push(`  - Source: ${location}`);
+    if (match.dataEntryName) lines.push(`  - Data entry: ${match.dataEntryName}`);
+  }
+
+  if (result.warnings.length > 0) {
+    lines.push("", "Warnings:", ...result.warnings.map((warning) => `- ${warning}`));
   }
 
   return lines.join("\n");
@@ -655,8 +787,17 @@ function formatInspectLayoutMarkdown(result: InspectLayoutOutput): string {
   ];
 
   for (const variable of result.variables) {
+    const categories =
+      variable.categories.length > 0
+        ? `; categories=${variable.categories
+            .slice(0, 5)
+            .map((category) => `${category.value}=${category.label}`)
+            .join(", ")}${variable.categories.length > 5 ? ", ..." : ""}`
+        : "";
     lines.push(
-      `- **${variable.name}** (${variable.type}, start ${variable.start}, width ${variable.width}): ${variable.description}`
+      `- **${variable.name}** (${variable.type}, start ${variable.start}, width ${variable.width}${
+        variable.decimals === undefined ? "" : `, decimals ${variable.decimals}`
+      }): ${variable.description}${categories}`
     );
   }
 

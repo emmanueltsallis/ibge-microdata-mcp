@@ -49,6 +49,9 @@ describe("public repository readiness", () => {
     expect(readme).toContain("examples/harmonization-recipe.json");
     expect(readme).toContain("docs/harmonization-sources.md");
     expect(readme).toContain("ibge_microdata_connectivity_check");
+    expect(readme).toContain("ibge_microdata_discover_metadata");
+    expect(readme).toContain("ibge_microdata_metadata_inventory");
+    expect(readme).toContain("ibge_microdata_search_variables");
     expect(readme).toContain("ibge_microdata_validate_recipe");
     expect(readme).toContain("ibge_microdata_apply_recipe");
     expect(readme).toContain("ibge_microdata_r_status");
@@ -62,6 +65,9 @@ describe("public repository readiness", () => {
     const serverSource = await readFile(path.join(projectRoot, "src", "server.ts"), "utf8");
 
     expect(serverSource).toContain("ibge_microdata_connectivity_check");
+    expect(serverSource).toContain("ibge_microdata_discover_metadata");
+    expect(serverSource).toContain("ibge_microdata_metadata_inventory");
+    expect(serverSource).toContain("ibge_microdata_search_variables");
     expect(serverSource).toContain("ibge_microdata_r_status");
     expect(serverSource).toContain("ibge_microdata_pnadc_r_download");
     expect(serverSource).toContain("ibge_microdata_datazoom_pnadc_load");

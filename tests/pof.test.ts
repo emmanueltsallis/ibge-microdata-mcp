@@ -53,6 +53,7 @@ describe("readPofDictionaryManifest", () => {
         decimals: 0,
         type: "string",
         description: "Unidade da Federação",
+        categories: [{ value: "11", label: "Rondônia" }],
       },
       {
         name: "V1028",
@@ -61,6 +62,7 @@ describe("readPofDictionaryManifest", () => {
         decimals: 0,
         type: "number",
         description: "Fator de expansão",
+        categories: [],
       },
       {
         name: "VRENDA",
@@ -69,6 +71,7 @@ describe("readPofDictionaryManifest", () => {
         decimals: 2,
         type: "number",
         description: "Rendimento com decimais",
+        categories: [],
       },
     ]);
   });
