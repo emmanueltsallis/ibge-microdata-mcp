@@ -27,6 +27,8 @@ Useful repositories:
 
 These are good sources for recipe authors. They are not bundled as built-in MCP rules because licensing and citation requirements can vary by material, and because adopting their choices as defaults would make this MCP an opinionated harmonized survey package.
 
+The project treats R as a prerequisite so MCP tools can interoperate with `PNADcIBGE` and `datazoom.social` workflows. The intended pattern is the same as the WID MCP R bridge: the MCP starts from a structured tool call, runs a local R package when needed, and returns MCP-friendly JSON plus local file paths rather than exposing R objects directly.
+
 ### Base dos Dados
 
 Base dos Dados provides a public data platform, SDKs, and its own MCP server with dataset metadata and BigQuery-oriented access.

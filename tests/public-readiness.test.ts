@@ -33,6 +33,9 @@ describe("public repository readiness", () => {
 
     const readme = await readFile(path.join(projectRoot, "README.md"), "utf8");
     expect(readme).toContain("git clone https://github.com/emmanueltsallis/ibge-microdata-mcp.git");
+    expect(readme).toContain("R with `Rscript` available on `PATH`");
+    expect(readme).toContain("PNADcIBGE");
+    expect(readme).toContain("datazoom.social");
     expect(readme).toContain("examples/generic-workflow.md");
     expect(readme).toContain("examples/harmonization-recipe.json");
     expect(readme).toContain("docs/harmonization-sources.md");

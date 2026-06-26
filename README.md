@@ -55,6 +55,26 @@ These helpers are layered on top of the same local-first workflow. They are usef
 | `ibge_microdata_pnadc_analyze_file` | PNAD Contínua convenience summary over an extracted fixed-width TXT file. |
 | `ibge_microdata_pnadc_analyze_zip` | PNAD Contínua convenience summary directly over a TXT entry inside a ZIP. |
 
+## Prerequisites
+
+This MCP is a local tool. Users are expected to have:
+
+- Node.js 18.20 or newer.
+- pnpm.
+- R with `Rscript` available on `PATH`.
+
+Install the baseline R packages used by the planned R-backed IBGE workflows:
+
+```r
+install.packages(c("PNADcIBGE", "survey", "jsonlite", "arrow"))
+install.packages(
+  "datazoom.social",
+  repos = c("https://datazoompuc.r-universe.dev", "https://cloud.r-project.org")
+)
+```
+
+R is included as a project prerequisite because PNAD Contínua and Data Zoom workflows are best supported by the existing Brazilian R ecosystem. The MCP server itself still runs as a Node/TypeScript process and returns MCP-friendly JSON, Markdown, and local file paths.
+
 ## Install
 
 Clone the GitHub repository:
