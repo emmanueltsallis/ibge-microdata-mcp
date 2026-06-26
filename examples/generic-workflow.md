@@ -129,6 +129,21 @@ ibge_microdata_weighted_distribution({
 Use a recipe when assumptions should be explicit, versioned, and reusable. See [harmonization-recipe.json](harmonization-recipe.json) for the JSON structure.
 
 ```text
+ibge_microdata_validate_recipe({
+  "recipePath": "/path/to/harmonization-recipe.json",
+  "views": [
+    {
+      "name": "microdata",
+      "parquetPaths": ["/Users/you/.cache/ibge-microdata-mcp/converted/sample.parquet"]
+    }
+  ],
+  "sampleRows": 5
+})
+```
+
+Then write the harmonized Parquet file only after the validation output passes:
+
+```text
 ibge_microdata_apply_recipe({
   "recipePath": "/path/to/harmonization-recipe.json",
   "views": [

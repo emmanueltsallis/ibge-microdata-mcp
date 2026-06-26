@@ -24,6 +24,7 @@ import {
   queryParquetTool,
   queryParquetViewsTool,
   remoteFileInfoTool,
+  validateHarmonizationRecipeTool,
   weightedDistributionTool,
   zipEntriesTool,
 } from "./tools.js";
@@ -421,6 +422,8 @@ const applyRecipeSchema = z.object({
     .describe("Maximum rows returned by each validation query. Defaults to 25 and is capped at 100."),
 });
 
+const validateRecipeSchema = applyRecipeSchema.omit({ outputPath: true });
+
 const weightedDistributionSchema = z.object({
   views: z
     .array(parquetViewSchema)
@@ -780,6 +783,19 @@ Use this after converting IBGE fixed-width microdata to Parquet and before writi
       annotations: READ_ONLY,
     },
     async (args) => toMcpResult(await profileParquetViewsTool(args))
+  );
+
+  server.registerTool(
+    "ibge_microdata_validate_recipe",
+    {
+      title: "Validate IBGE Harmonization Recipe",
+      description: `Validate a local JSON harmonization recipe against named local IBGE Parquet views without writing an output file.
+
+Use this before ibge_microdata_apply_recipe. It checks required input columns, builds the output view in memory, returns output schema/sample rows, and runs validation queries so harmonization assumptions can be inspected safely.`,
+      inputSchema: validateRecipeSchema.shape,
+      annotations: READ_ONLY,
+    },
+    async (args) => toMcpResult(await validateHarmonizationRecipeTool(args))
   );
 
   server.registerTool(

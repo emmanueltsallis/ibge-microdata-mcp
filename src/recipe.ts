@@ -6,12 +6,15 @@ import { z } from "zod";
 
 import type { JsonValue, ParquetViewColumn, QueryParquetView } from "./parquet-query.js";
 
-export interface ApplyHarmonizationRecipeInput {
+export interface ValidateHarmonizationRecipeInput {
   recipePath: string;
   views: QueryParquetView[];
-  outputPath: string;
   sampleRows?: number;
   maxValidationRows?: number;
+}
+
+export interface ApplyHarmonizationRecipeInput extends ValidateHarmonizationRecipeInput {
+  outputPath: string;
 }
 
 export interface HarmonizationRecipeSummary {
@@ -32,17 +35,36 @@ export interface HarmonizationValidationResult {
   rows: Array<Record<string, JsonValue>>;
 }
 
-export interface ApplyHarmonizationRecipeOutput {
+export interface HarmonizationRequirementResult {
+  viewName: string;
+  requiredColumns: string[];
+  missingColumns: string[];
+  passed: boolean;
+}
+
+export interface MissingHarmonizationRequirement {
+  viewName: string;
+  column: string;
+}
+
+export interface ValidateHarmonizationRecipeOutput {
   recipePath: string;
   recipe: HarmonizationRecipeSummary;
   views: QueryParquetView[];
-  outputPath: string;
   outputViewName: string;
-  outputRows: number;
+  outputRows: number | null;
   outputColumns: ParquetViewColumn[];
   sampleRows: Array<Record<string, JsonValue>>;
+  requirementsPassed: boolean;
+  requirements: HarmonizationRequirementResult[];
+  missingRequirements: MissingHarmonizationRequirement[];
   validationsPassed: boolean;
   validations: HarmonizationValidationResult[];
+}
+
+export interface ApplyHarmonizationRecipeOutput extends Omit<ValidateHarmonizationRecipeOutput, "outputRows"> {
+  outputPath: string;
+  outputRows: number;
 }
 
 interface HarmonizationRecipe {
@@ -115,6 +137,36 @@ const recipeSchema = z.object({
 export async function applyHarmonizationRecipe(
   input: ApplyHarmonizationRecipeInput
 ): Promise<ApplyHarmonizationRecipeOutput> {
+  const evaluated = await evaluateHarmonizationRecipe(input, input.outputPath);
+  if (!evaluated.requirementsPassed) {
+    if (evaluated.missingRequirements.length === 1) {
+      const missing = evaluated.missingRequirements[0];
+      throw new Error(`Recipe requires missing column in view ${missing.viewName}: ${missing.column}`);
+    }
+    throw new Error(`Recipe requirements failed: ${formatMissingRequirements(evaluated.missingRequirements)}`);
+  }
+  const failedValidation = evaluated.validations.find((validation) => !validation.passed);
+  if (failedValidation !== undefined) {
+    throw new Error(`Recipe validation failed: ${failedValidation.name}`);
+  }
+
+  return {
+    ...evaluated,
+    outputPath: input.outputPath,
+    outputRows: evaluated.outputRows ?? 0,
+  };
+}
+
+export async function validateHarmonizationRecipe(
+  input: ValidateHarmonizationRecipeInput
+): Promise<ValidateHarmonizationRecipeOutput> {
+  return evaluateHarmonizationRecipe(input);
+}
+
+async function evaluateHarmonizationRecipe(
+  input: ValidateHarmonizationRecipeInput,
+  outputPath?: string
+): Promise<ValidateHarmonizationRecipeOutput> {
   const recipe = await readRecipe(input.recipePath);
   const views = validateViews(input.views);
   const sampleRows = normalizeSampleRows(input.sampleRows);
@@ -132,35 +184,52 @@ export async function applyHarmonizationRecipe(
 
   try {
     await createParquetViews(connection, views);
-    await assertRequiredColumns(connection, recipe);
+    const requirements = await checkRequiredColumns(connection, recipe, new Set(views.map((view) => view.name)));
+    const missingRequirements = flattenMissingRequirements(requirements);
+    const requirementsPassed = missingRequirements.length === 0;
+    const recipeSummary = summarizeRecipe(recipe);
+
+    if (!requirementsPassed) {
+      return {
+        recipePath: input.recipePath,
+        recipe: recipeSummary,
+        views,
+        outputViewName,
+        outputRows: null,
+        outputColumns: [],
+        sampleRows: [],
+        requirementsPassed,
+        requirements,
+        missingRequirements,
+        validationsPassed: false,
+        validations: [],
+      };
+    }
+
     await connection.run(`create or replace temp view ${sqlIdentifier(outputViewName)} as ${outputSql}`);
 
     const validations = await runRecipeValidations(connection, recipe, maxValidationRows);
-    const failedValidation = validations.find((validation) => !validation.passed);
-    if (failedValidation !== undefined) {
-      throw new Error(`Recipe validation failed: ${failedValidation.name}`);
-    }
+    const validationsPassed = validations.every((validation) => validation.passed);
 
-    await mkdir(path.dirname(input.outputPath), { recursive: true });
-    await connection.run(
-      `copy (select * from ${sqlIdentifier(outputViewName)}) to ${sqlString(input.outputPath)} (format parquet)`
-    );
+    if (outputPath !== undefined && validationsPassed) {
+      await mkdir(path.dirname(outputPath), { recursive: true });
+      await connection.run(
+        `copy (select * from ${sqlIdentifier(outputViewName)}) to ${sqlString(outputPath)} (format parquet)`
+      );
+    }
 
     return {
       recipePath: input.recipePath,
-      recipe: {
-        schemaVersion: recipe.schemaVersion,
-        name: recipe.name,
-        ...(recipe.description === undefined ? {} : { description: recipe.description }),
-        sources: recipe.sources,
-      },
+      recipe: recipeSummary,
       views,
-      outputPath: input.outputPath,
       outputViewName,
       outputRows: await countViewRows(connection, outputViewName),
       outputColumns: await describeViewColumns(connection, outputViewName),
       sampleRows: sampleRows > 0 ? await sampleViewRows(connection, outputViewName, sampleRows) : [],
-      validationsPassed: true,
+      requirementsPassed,
+      requirements,
+      missingRequirements,
+      validationsPassed,
       validations,
     };
   } finally {
@@ -196,19 +265,58 @@ async function createParquetViews(
   }
 }
 
-async function assertRequiredColumns(
+function summarizeRecipe(recipe: HarmonizationRecipe): HarmonizationRecipeSummary {
+  return {
+    schemaVersion: recipe.schemaVersion,
+    name: recipe.name,
+    ...(recipe.description === undefined ? {} : { description: recipe.description }),
+    sources: recipe.sources,
+  };
+}
+
+async function checkRequiredColumns(
   connection: Awaited<ReturnType<DuckDBInstance["connect"]>>,
-  recipe: HarmonizationRecipe
-): Promise<void> {
+  recipe: HarmonizationRecipe,
+  availableViewNames: Set<string>
+): Promise<HarmonizationRequirementResult[]> {
+  const results: HarmonizationRequirementResult[] = [];
+
   for (const requiredView of recipe.requiredViews) {
+    if (!availableViewNames.has(requiredView.name)) {
+      results.push({
+        viewName: requiredView.name,
+        requiredColumns: requiredView.columns,
+        missingColumns: requiredView.columns,
+        passed: false,
+      });
+      continue;
+    }
+
     const columns = await describeViewColumns(connection, requiredView.name);
     const existingColumns = new Set(columns.map((column) => column.name));
-    for (const column of requiredView.columns) {
-      if (!existingColumns.has(column)) {
-        throw new Error(`Recipe requires missing column in view ${requiredView.name}: ${column}`);
-      }
-    }
+    const missingColumns = requiredView.columns.filter((column) => !existingColumns.has(column));
+    results.push({
+      viewName: requiredView.name,
+      requiredColumns: requiredView.columns,
+      missingColumns,
+      passed: missingColumns.length === 0,
+    });
   }
+
+  return results;
+}
+
+function flattenMissingRequirements(requirements: HarmonizationRequirementResult[]): MissingHarmonizationRequirement[] {
+  return requirements.flatMap((requirement) =>
+    requirement.missingColumns.map((column) => ({
+      viewName: requirement.viewName,
+      column,
+    }))
+  );
+}
+
+function formatMissingRequirements(missingRequirements: MissingHarmonizationRequirement[]): string {
+  return missingRequirements.map((requirement) => `${requirement.viewName}.${requirement.column}`).join(", ");
 }
 
 async function runRecipeValidations(

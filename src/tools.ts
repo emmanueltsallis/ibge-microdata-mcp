@@ -27,8 +27,11 @@ import { summarizePnadcTextFile, type SummarizePnadcTextFileOutput } from "./pna
 import { summarizePnadcZipFile, type SummarizePnadcZipFileOutput } from "./pnadc-zip.js";
 import {
   applyHarmonizationRecipe,
+  validateHarmonizationRecipe,
   type ApplyHarmonizationRecipeInput,
   type ApplyHarmonizationRecipeOutput,
+  type ValidateHarmonizationRecipeInput,
+  type ValidateHarmonizationRecipeOutput,
 } from "./recipe.js";
 import {
   exportPofZipRecordToParquet,
@@ -205,6 +208,8 @@ export type ProfileParquetViewsToolInput = ProfileParquetViewsInput;
 export type WeightedDistributionToolInput = WeightedDistributionInput;
 
 export type ApplyHarmonizationRecipeToolInput = ApplyHarmonizationRecipeInput;
+
+export type ValidateHarmonizationRecipeToolInput = ValidateHarmonizationRecipeInput;
 
 export interface PofDictionaryManifestToolInput {
   dictionaryPath: string;
@@ -477,7 +482,17 @@ export async function applyHarmonizationRecipeTool(
 ): Promise<ToolResult<ApplyHarmonizationRecipeOutput>> {
   const result = await applyHarmonizationRecipe(input);
   return {
-    markdown: formatHarmonizationRecipeMarkdown(result),
+    markdown: formatHarmonizationRecipeMarkdown(result, "Applied"),
+    structured: result,
+  };
+}
+
+export async function validateHarmonizationRecipeTool(
+  input: ValidateHarmonizationRecipeToolInput
+): Promise<ToolResult<ValidateHarmonizationRecipeOutput>> {
+  const result = await validateHarmonizationRecipe(input);
+  return {
+    markdown: formatHarmonizationRecipeMarkdown(result, "Validated"),
     structured: result,
   };
 }
@@ -773,15 +788,19 @@ function formatParquetViewProfileMarkdown(result: ProfileParquetViewsOutput): st
   return lines.join("\n");
 }
 
-function formatHarmonizationRecipeMarkdown(result: ApplyHarmonizationRecipeOutput): string {
+function formatHarmonizationRecipeMarkdown(
+  result: ApplyHarmonizationRecipeOutput | ValidateHarmonizationRecipeOutput,
+  action: "Applied" | "Validated"
+): string {
   const lines = [
-    "# Applied Harmonization Recipe",
+    `# ${action} Harmonization Recipe`,
     "",
     `Recipe: ${result.recipe.name}`,
     `Recipe path: ${result.recipePath}`,
-    `Output path: ${result.outputPath}`,
+    ...("outputPath" in result ? [`Output path: ${result.outputPath}`] : []),
     `Output view: ${result.outputViewName}`,
-    `Output rows: ${result.outputRows}`,
+    `Output rows: ${result.outputRows ?? "not available"}`,
+    `Requirements passed: ${result.requirementsPassed ? "yes" : "no"}`,
     `Validations passed: ${result.validationsPassed ? "yes" : "no"}`,
     "",
     "Columns:",
@@ -795,6 +814,13 @@ function formatHarmonizationRecipeMarkdown(result: ApplyHarmonizationRecipeOutpu
     lines.push("", "Validations:");
     for (const validation of result.validations) {
       lines.push(`- ${validation.name}: ${validation.passed ? "passed" : "failed"}`);
+    }
+  }
+
+  if (result.missingRequirements.length > 0) {
+    lines.push("", "Missing requirements:");
+    for (const missing of result.missingRequirements) {
+      lines.push(`- ${missing.viewName}.${missing.column}`);
     }
   }
 

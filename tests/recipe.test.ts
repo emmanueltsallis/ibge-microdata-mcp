@@ -1,11 +1,11 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
 import { DuckDBInstance } from "@duckdb/node-api";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { applyHarmonizationRecipe } from "../src/recipe.js";
+import { applyHarmonizationRecipe, validateHarmonizationRecipe } from "../src/recipe.js";
 
 let tempDir: string;
 
@@ -15,6 +15,144 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await rm(tempDir, { recursive: true, force: true });
+});
+
+describe("validateHarmonizationRecipe", () => {
+  it("previews a portable JSON recipe without writing a harmonized output", async () => {
+    const parquetPath = path.join(tempDir, "raw.parquet");
+    const recipePath = path.join(tempDir, "recipe.json");
+    const outputPath = path.join(tempDir, "harmonized", "preview.parquet");
+    await createParquetFromSql(
+      parquetPath,
+      "create table sample(UF varchar, V1028 double, raw_value double)",
+      "insert into sample values ('33', 80, 1000), ('35', 10, 3000)"
+    );
+    await writeRecipe(recipePath, {
+      schemaVersion: 1,
+      name: "basic_region_value",
+      description: "Minimal portable recipe for tests",
+      sources: [{ label: "Test dictionary", url: "https://example.test/dictionary" }],
+      requiredViews: [{ name: "microdata", columns: ["UF", "V1028", "raw_value"] }],
+      output: {
+        viewName: "harmonized_microdata",
+        sql: `
+          select
+            UF as region,
+            cast(V1028 as double) as sample_weight,
+            cast(raw_value as double) as target_value
+          from microdata
+        `
+      },
+      validations: [
+        {
+          name: "row_count",
+          sql: "select count(*) as rows_checked from harmonized_microdata",
+          expect: { column: "rows_checked", equals: 2 }
+        }
+      ]
+    });
+
+    const result = await validateHarmonizationRecipe({
+      recipePath,
+      views: [{ name: "microdata", parquetPaths: [parquetPath] }],
+      sampleRows: 1
+    });
+
+    expect(result).toMatchObject({
+      recipe: {
+        schemaVersion: 1,
+        name: "basic_region_value",
+        description: "Minimal portable recipe for tests"
+      },
+      requirementsPassed: true,
+      outputRows: 2,
+      validationsPassed: true
+    });
+    expect(result.outputColumns).toEqual([
+      { name: "region", type: "VARCHAR" },
+      { name: "sample_weight", type: "DOUBLE" },
+      { name: "target_value", type: "DOUBLE" }
+    ]);
+    expect(result.validations).toEqual([
+      {
+        name: "row_count",
+        passed: true,
+        rows: [{ rows_checked: "2" }]
+      }
+    ]);
+    expect(result.sampleRows).toEqual([{ region: "33", sample_weight: 80, target_value: 1000 }]);
+    await expect(access(outputPath)).rejects.toThrow();
+  });
+
+  it("returns missing required columns as diagnostics instead of writing output", async () => {
+    const parquetPath = path.join(tempDir, "raw.parquet");
+    const recipePath = path.join(tempDir, "recipe.json");
+    await createParquetFromSql(
+      parquetPath,
+      "create table sample(UF varchar, V1028 double)",
+      "insert into sample values ('33', 80)"
+    );
+    await writeRecipe(recipePath, {
+      schemaVersion: 1,
+      name: "missing_column_recipe",
+      requiredViews: [{ name: "microdata", columns: ["UF", "missing_value"] }],
+      output: {
+        viewName: "harmonized_microdata",
+        sql: "select UF as region from microdata"
+      }
+    });
+
+    const result = await validateHarmonizationRecipe({
+      recipePath,
+      views: [{ name: "microdata", parquetPaths: [parquetPath] }]
+    });
+
+    expect(result.requirementsPassed).toBe(false);
+    expect(result.missingRequirements).toEqual([{ viewName: "microdata", column: "missing_value" }]);
+    expect(result.outputRows).toBeNull();
+    expect(result.outputColumns).toEqual([]);
+    expect(result.sampleRows).toEqual([]);
+    expect(result.validationsPassed).toBe(false);
+    expect(result.validations).toEqual([]);
+  });
+
+  it("returns missing required views as requirement diagnostics", async () => {
+    const parquetPath = path.join(tempDir, "raw.parquet");
+    const recipePath = path.join(tempDir, "recipe.json");
+    await createParquetFromSql(
+      parquetPath,
+      "create table sample(UF varchar)",
+      "insert into sample values ('33')"
+    );
+    await writeRecipe(recipePath, {
+      schemaVersion: 1,
+      name: "missing_view_recipe",
+      requiredViews: [{ name: "missing_view", columns: ["UF", "V1028"] }],
+      output: {
+        viewName: "harmonized_microdata",
+        sql: "select UF as region from missing_view"
+      }
+    });
+
+    const result = await validateHarmonizationRecipe({
+      recipePath,
+      views: [{ name: "microdata", parquetPaths: [parquetPath] }]
+    });
+
+    expect(result.requirementsPassed).toBe(false);
+    expect(result.requirements).toEqual([
+      {
+        viewName: "missing_view",
+        requiredColumns: ["UF", "V1028"],
+        missingColumns: ["UF", "V1028"],
+        passed: false
+      }
+    ]);
+    expect(result.missingRequirements).toEqual([
+      { viewName: "missing_view", column: "UF" },
+      { viewName: "missing_view", column: "V1028" }
+    ]);
+  });
 });
 
 describe("applyHarmonizationRecipe", () => {
@@ -66,6 +204,7 @@ describe("applyHarmonizationRecipe", () => {
         description: "Minimal portable recipe for tests"
       },
       outputPath,
+      requirementsPassed: true,
       outputRows: 2,
       validationsPassed: true
     });

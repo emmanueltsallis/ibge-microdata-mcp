@@ -27,6 +27,7 @@ import {
   queryParquetTool,
   queryParquetViewsTool,
   remoteFileInfoTool,
+  validateHarmonizationRecipeTool,
   weightedDistributionTool,
   zipEntriesTool
 } from "../src/tools.js";
@@ -555,6 +556,60 @@ describe("profileParquetViewsTool", () => {
 });
 
 describe("applyHarmonizationRecipeTool", () => {
+  it("validates a portable harmonization recipe without writing output", async () => {
+    const layoutPath = path.join(tempDir, "recipe-validate-input.txt");
+    const dataPath = path.join(tempDir, "recipe-validate-data.txt");
+    const parquetPath = path.join(tempDir, "recipe-validate-raw.parquet");
+    const recipePath = path.join(tempDir, "recipe-validate.json");
+    await writeFile(
+      layoutPath,
+      `
+@0001 region        $2.   /* Region */
+@0003 sample_weight 3.    /* Sample weight */
+@0006 raw_value     4.    /* Raw value */
+`
+    );
+    await writeFile(dataPath, ["330801000", "350103000"].join("\n"));
+    await fixedWidthFileToParquetTool({ layoutPath, dataPath, outputPath: parquetPath });
+    await writeFile(
+      recipePath,
+      JSON.stringify(
+        {
+          schemaVersion: 1,
+          name: "generic_validate_recipe",
+          requiredViews: [{ name: "microdata", columns: ["region", "sample_weight", "raw_value"] }],
+          output: {
+            viewName: "harmonized_microdata",
+            sql: "select region, sample_weight, raw_value as target_value from microdata"
+          },
+          validations: [
+            {
+              name: "row_count",
+              sql: "select count(*) as rows_checked from harmonized_microdata",
+              expect: { column: "rows_checked", equals: 2 }
+            }
+          ]
+        },
+        null,
+        2
+      )
+    );
+
+    const result = await validateHarmonizationRecipeTool({
+      recipePath,
+      views: [{ name: "microdata", parquetPaths: [parquetPath] }],
+      sampleRows: 1
+    });
+
+    expect(result.structured.recipe.name).toBe("generic_validate_recipe");
+    expect(result.structured.requirementsPassed).toBe(true);
+    expect(result.structured.outputRows).toBe(2);
+    expect(result.structured.validationsPassed).toBe(true);
+    expect(result.structured.sampleRows).toEqual([{ region: "33", sample_weight: 80, target_value: 1000 }]);
+    expect(result.markdown).toContain("Validated Harmonization Recipe");
+    expect(result.markdown).toContain("Requirements passed: yes");
+  });
+
   it("wraps a portable harmonization recipe for MCP-friendly output", async () => {
     const layoutPath = path.join(tempDir, "recipe-input.txt");
     const dataPath = path.join(tempDir, "recipe-data.txt");
