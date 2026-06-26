@@ -54,6 +54,9 @@ These helpers are layered on top of the same local-first workflow. They are usef
 | `ibge_microdata_pof_zip_record_to_parquet` | Convert one POF record from a Dados ZIP to Parquet using the POF dictionary. |
 | `ibge_microdata_pnadc_analyze_file` | PNAD Contínua convenience summary over an extracted fixed-width TXT file. |
 | `ibge_microdata_pnadc_analyze_zip` | PNAD Contínua convenience summary directly over a TXT entry inside a ZIP. |
+| `ibge_microdata_r_status` | Check local `Rscript` and required R packages. |
+| `ibge_microdata_pnadc_r_download` | Use `PNADcIBGE` through R to download PNAD Contínua and write Parquet or RDS. |
+| `ibge_microdata_datazoom_pnadc_load` | Use `datazoom.social` through R to load PNAD Contínua and save produced files. |
 
 ## Prerequisites
 
@@ -122,7 +125,7 @@ pnpm install
 pnpm run build
 ```
 
-4. Install the baseline R packages used by the planned R-backed IBGE workflows:
+4. Install the baseline R packages used by the R-backed IBGE workflows:
 
 ```bash
 Rscript -e 'install.packages(c("PNADcIBGE", "survey", "jsonlite", "arrow"), repos = "https://cloud.r-project.org")'
@@ -149,6 +152,37 @@ Example MCP client config:
 ```
 
 For a shorter generic walkthrough, see [examples/generic-workflow.md](examples/generic-workflow.md). For a starter harmonization recipe, see [examples/harmonization-recipe.json](examples/harmonization-recipe.json). For external harmonization sources that can inform recipes, see [docs/harmonization-sources.md](docs/harmonization-sources.md).
+
+## R-Backed PNADc Workflow
+
+Use the R status tool first:
+
+```text
+ibge_microdata_r_status({})
+```
+
+Download PNAD Contínua through `PNADcIBGE` and write a Parquet file that the MCP can query with DuckDB:
+
+```text
+ibge_microdata_pnadc_r_download({
+  "year": 2024,
+  "quarter": 4,
+  "vars": ["UF", "V1028"],
+  "outputPath": "/Users/you/.cache/ibge-microdata-mcp/converted/pnadc_2024q4.parquet"
+})
+```
+
+Use `datazoom.social` when you want Data Zoom's PNAD Contínua processing or panel identifiers:
+
+```text
+ibge_microdata_datazoom_pnadc_load({
+  "outputDir": "/Users/you/.cache/ibge-microdata-mcp/datazoom/pnadc",
+  "years": [2024],
+  "quarters": [1, 2, 3, 4],
+  "panel": "basic",
+  "outputFormat": "parquet"
+})
+```
 
 ## Generic Workflow
 
@@ -409,6 +443,14 @@ RUN_IBGE_SMOKE=1 pnpm test -- tests/smoke.test.ts
 ```
 
 Smoke tests list official directories, read HEAD metadata, and download the smaller POF documentation ZIP to verify dictionary parsing. They do not download large microdata data ZIPs.
+
+Local R setup smoke test:
+
+```bash
+RUN_R_SMOKE=1 pnpm test -- tests/r-smoke.test.ts
+```
+
+The R smoke test checks `Rscript` and baseline R package availability. It does not download PNAD microdata.
 
 ## Current Limits
 

@@ -50,6 +50,18 @@ describe("public repository readiness", () => {
     expect(readme).toContain("docs/harmonization-sources.md");
     expect(readme).toContain("ibge_microdata_validate_recipe");
     expect(readme).toContain("ibge_microdata_apply_recipe");
+    expect(readme).toContain("ibge_microdata_r_status");
+    expect(readme).toContain("ibge_microdata_pnadc_r_download");
+    expect(readme).toContain("ibge_microdata_datazoom_pnadc_load");
+    expect(readme).toContain("RUN_R_SMOKE=1 pnpm test -- tests/r-smoke.test.ts");
     expect(readme).toContain("License");
+  });
+
+  it("registers R-backed PNADc tools in the MCP server", async () => {
+    const serverSource = await readFile(path.join(projectRoot, "src", "server.ts"), "utf8");
+
+    expect(serverSource).toContain("ibge_microdata_r_status");
+    expect(serverSource).toContain("ibge_microdata_pnadc_r_download");
+    expect(serverSource).toContain("ibge_microdata_datazoom_pnadc_load");
   });
 });

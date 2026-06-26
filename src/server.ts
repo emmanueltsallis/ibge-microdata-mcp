@@ -18,12 +18,15 @@ import {
   inspectLayoutTool,
   pnadcAnalyzeFileTool,
   pnadcAnalyzeZipTool,
+  pnadcRDownloadTool,
   pofDictionaryManifestTool,
   pofZipRecordToParquetTool,
   profileParquetViewsTool,
   queryParquetTool,
   queryParquetViewsTool,
   remoteFileInfoTool,
+  rStatusTool,
+  datazoomPnadcLoadTool,
   validateHarmonizationRecipeTool,
   weightedDistributionTool,
   zipEntriesTool,
@@ -217,6 +220,139 @@ const pnadcAnalyzeZipSchema = z.object({
     .array(z.number().gt(0).lte(1))
     .optional()
     .describe("Top weighted-value brackets as fractions, e.g. [0.01, 0.05, 0.1]."),
+});
+
+const rStatusSchema = z.object({
+  rscriptBin: z
+    .string()
+    .min(1)
+    .optional()
+    .describe("Optional Rscript executable path. Defaults to Rscript on PATH."),
+  packages: z
+    .array(z.string().min(1))
+    .optional()
+    .describe("Optional R package names to check. Defaults to PNADcIBGE, datazoom.social, survey, jsonlite, and arrow."),
+});
+
+const pnadcRDownloadSchema = z.object({
+  rscriptBin: z
+    .string()
+    .min(1)
+    .optional()
+    .describe("Optional Rscript executable path. Defaults to Rscript on PATH."),
+  year: z
+    .number()
+    .int()
+    .min(2012)
+    .describe("PNAD Contínua reference year, e.g. 2024."),
+  quarter: z
+    .number()
+    .int()
+    .min(1)
+    .max(4)
+    .optional()
+    .describe("Quarter to download. Provide exactly one of quarter, interview, or topic."),
+  interview: z
+    .number()
+    .int()
+    .min(1)
+    .max(5)
+    .optional()
+    .describe("Interview number to download. Provide exactly one of quarter, interview, or topic."),
+  topic: z
+    .number()
+    .int()
+    .min(1)
+    .max(4)
+    .optional()
+    .describe("Topic supplement to download. Provide exactly one of quarter, interview, or topic."),
+  vars: z
+    .array(z.string().min(1))
+    .optional()
+    .describe("Optional PNADc variable names to request from PNADcIBGE, e.g. UF, V1028, VD4019."),
+  outputPath: z
+    .string()
+    .min(1)
+    .describe("Local destination path. Use .parquet for DuckDB workflows or .rds for R objects."),
+  outputFormat: z
+    .enum(["parquet", "rds"])
+    .optional()
+    .describe("Output format. Defaults to parquet unless outputPath ends with .rds."),
+  selected: z
+    .boolean()
+    .optional()
+    .describe("Pass selected to PNADcIBGE::get_pnadc. Defaults to false."),
+  labels: z
+    .boolean()
+    .optional()
+    .describe("Pass labels to PNADcIBGE::get_pnadc. Defaults to true."),
+  deflator: z
+    .boolean()
+    .optional()
+    .describe("Pass deflator to PNADcIBGE::get_pnadc. Defaults to true."),
+  design: z
+    .boolean()
+    .optional()
+    .describe("Pass design to PNADcIBGE::get_pnadc. Defaults to false. Parquet output requires false."),
+  reload: z
+    .boolean()
+    .optional()
+    .describe("Pass reload to PNADcIBGE::get_pnadc. Defaults to true."),
+  savedir: z
+    .string()
+    .min(1)
+    .optional()
+    .describe("Optional PNADcIBGE cache/download directory."),
+  defyear: z
+    .number()
+    .int()
+    .optional()
+    .describe("Optional deflator reference year passed to PNADcIBGE."),
+  defperiod: z
+    .number()
+    .int()
+    .optional()
+    .describe("Optional deflator reference period passed to PNADcIBGE."),
+});
+
+const datazoomPnadcLoadSchema = z.object({
+  rscriptBin: z
+    .string()
+    .min(1)
+    .optional()
+    .describe("Optional Rscript executable path. Defaults to Rscript on PATH."),
+  outputDir: z
+    .string()
+    .min(1)
+    .describe("Local directory where datazoom.social should save produced files."),
+  years: z
+    .array(z.number().int().min(2012))
+    .min(1)
+    .describe("PNAD Contínua years to load."),
+  quarters: z
+    .array(z.number().int().min(1).max(4))
+    .optional()
+    .describe("Optional quarters to load. Defaults to all four quarters."),
+  panel: z
+    .enum(["none", "basic", "advanced", "advanced_1", "advanced_2", "advanced_3"])
+    .optional()
+    .describe("datazoom.social panel option. Defaults to advanced_3."),
+  rawData: z
+    .boolean()
+    .optional()
+    .describe("Whether datazoom.social should keep raw data. Defaults to false."),
+  outputFormat: z
+    .enum(["parquet", "csv"])
+    .optional()
+    .describe("Output format for datazoom.social saved files. Defaults to parquet."),
+  saveQuarterly: z
+    .boolean()
+    .optional()
+    .describe("Whether to save quarterly files. Defaults to false."),
+  vars: z
+    .array(z.string().min(1))
+    .optional()
+    .describe("Optional variables to pass to datazoom.social when supported."),
 });
 
 const zipEntriesSchema = z.object({
@@ -666,6 +802,45 @@ Use it after downloading a PNAD ZIP and extracting or otherwise providing the of
       annotations: READ_ONLY,
     },
     async (args) => toMcpResult(await pnadcAnalyzeZipTool(args))
+  );
+
+  server.registerTool(
+    "ibge_microdata_r_status",
+    {
+      title: "Check IBGE R Runtime",
+      description: `Check whether local Rscript and the R packages used by R-backed IBGE workflows are available.
+
+Use this before R-backed PNAD Contínua tools to diagnose setup issues without downloading data.`,
+      inputSchema: rStatusSchema.shape,
+      annotations: READ_ONLY,
+    },
+    async (args) => toMcpResult(await rStatusTool(args))
+  );
+
+  server.registerTool(
+    "ibge_microdata_pnadc_r_download",
+    {
+      title: "Download PNADc With R",
+      description: `Use the local PNADcIBGE R package to download PNAD Contínua data and write a local Parquet or RDS file.
+
+This is the plug-and-play R bridge for PNAD Contínua. It calls PNADcIBGE::get_pnadc through Rscript, then returns a local output path, row count, columns, and package versions. Use Parquet output when the next step is DuckDB querying or MCP weighted-distribution analysis.`,
+      inputSchema: pnadcRDownloadSchema.shape,
+      annotations: LOCAL_WRITE,
+    },
+    async (args) => toMcpResult(await pnadcRDownloadTool(args))
+  );
+
+  server.registerTool(
+    "ibge_microdata_datazoom_pnadc_load",
+    {
+      title: "Load PNADc With Data Zoom",
+      description: `Use the local datazoom.social R package to load PNAD Contínua data and save the produced files in a local directory.
+
+Use this when the user wants Data Zoom's PNAD Contínua processing or panel identifiers. The MCP returns the files produced by datazoom.social so they can be inspected, queried, or used in recipes.`,
+      inputSchema: datazoomPnadcLoadSchema.shape,
+      annotations: LOCAL_WRITE,
+    },
+    async (args) => toMcpResult(await datazoomPnadcLoadTool(args))
   );
 
   server.registerTool(

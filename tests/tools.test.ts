@@ -21,16 +21,20 @@ import {
   listSurveysTool,
   pnadcAnalyzeFileTool,
   pnadcAnalyzeZipTool,
+  pnadcRDownloadTool,
   pofDictionaryManifestTool,
   pofZipRecordToParquetTool,
   profileParquetViewsTool,
   queryParquetTool,
   queryParquetViewsTool,
   remoteFileInfoTool,
+  rStatusTool,
+  datazoomPnadcLoadTool,
   validateHarmonizationRecipeTool,
   weightedDistributionTool,
   zipEntriesTool
 } from "../src/tools.js";
+import type { RunRScript } from "../src/r-bridge.js";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
@@ -315,6 +319,99 @@ describe("pnadcAnalyzeZipTool", () => {
     expect(result.structured.zipEntryName).toBe("PNADC_sample.txt");
     expect(result.structured.summary.groups.employer_with_cnpj.weight).toBe(10);
     expect(result.markdown).toContain("ZIP entry: PNADC_sample.txt");
+  });
+});
+
+describe("R-backed tools", () => {
+  it("wraps R runtime status checks for MCP-friendly output", async () => {
+    const runRScript: RunRScript = async () =>
+      JSON.stringify({
+        r_version: "R version 4.4.2",
+        packages: [
+          { name: "PNADcIBGE", installed: true, version: "0.7.5" },
+          { name: "arrow", installed: true, version: "16.1.0" }
+        ]
+      });
+
+    const result = await rStatusTool({ packages: ["PNADcIBGE", "arrow"] }, { runRScript });
+
+    expect(result.structured.ok).toBe(true);
+    expect(result.structured.missingPackages).toEqual([]);
+    expect(result.markdown).toContain("IBGE R Runtime Status");
+    expect(result.markdown).toContain("PNADcIBGE");
+  });
+
+  it("wraps PNADcIBGE R downloads as local output files", async () => {
+    const outputPath = path.join(tempDir, "pnadc.parquet");
+    const runRScript: RunRScript = async () =>
+      JSON.stringify({
+        backend: "PNADcIBGE",
+        year: 2024,
+        quarter: 4,
+        output_path: outputPath,
+        output_format: "parquet",
+        rows: 2,
+        columns: ["UF", "VD4019"],
+        package_versions: { PNADcIBGE: "0.7.5", arrow: "16.1.0" }
+      });
+
+    const result = await pnadcRDownloadTool(
+      {
+        year: 2024,
+        quarter: 4,
+        vars: ["UF", "VD4019"],
+        outputPath
+      },
+      { runRScript }
+    );
+
+    expect(result.structured).toMatchObject({
+      backend: "PNADcIBGE",
+      outputPath,
+      outputFormat: "parquet",
+      rows: 2,
+      columns: ["UF", "VD4019"]
+    });
+    expect(result.markdown).toContain("PNADcIBGE Export");
+    expect(result.markdown).toContain(outputPath);
+  });
+
+  it("wraps datazoom.social PNADc loads as produced local files", async () => {
+    const outputDir = path.join(tempDir, "datazoom");
+    const runRScript: RunRScript = async () =>
+      JSON.stringify({
+        backend: "datazoom.social",
+        output_dir: outputDir,
+        years: [2024],
+        quarters: [1, 2],
+        panel: "basic",
+        raw_data: false,
+        output_format: "parquet",
+        save_quarterly: false,
+        files: [{ path: path.join(outputDir, "pnadc.parquet"), relative_path: "pnadc.parquet", bytes: 100 }],
+        package_versions: { "datazoom.social": "0.1.0" }
+      });
+
+    const result = await datazoomPnadcLoadTool(
+      {
+        outputDir,
+        years: [2024],
+        quarters: [1, 2],
+        panel: "basic"
+      },
+      { runRScript }
+    );
+
+    expect(result.structured).toMatchObject({
+      backend: "datazoom.social",
+      outputDir,
+      years: [2024],
+      quarters: [1, 2],
+      panel: "basic",
+      files: [{ path: path.join(outputDir, "pnadc.parquet"), bytes: 100 }]
+    });
+    expect(result.markdown).toContain("Data Zoom PNADc Export");
+    expect(result.markdown).toContain("pnadc.parquet");
   });
 });
 

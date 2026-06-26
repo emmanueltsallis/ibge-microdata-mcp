@@ -26,6 +26,18 @@ import { inspectLayout, type InspectLayoutOutput } from "./layout-inspect.js";
 import { summarizePnadcTextFile, type SummarizePnadcTextFileOutput } from "./pnadc-file.js";
 import { summarizePnadcZipFile, type SummarizePnadcZipFileOutput } from "./pnadc-zip.js";
 import {
+  checkRRuntime,
+  downloadPnadcWithR,
+  loadDatazoomPnadcWithR,
+  type CheckRRuntimeInput,
+  type DatazoomPnadcLoadOutput,
+  type DownloadPnadcWithRInput,
+  type LoadDatazoomPnadcWithRInput,
+  type PnadcRDownloadOutput,
+  type RRuntimeStatus,
+  type RunRScript,
+} from "./r-bridge.js";
+import {
   applyHarmonizationRecipe,
   validateHarmonizationRecipe,
   type ApplyHarmonizationRecipeInput,
@@ -145,6 +157,16 @@ export interface PnadcAnalyzeZipInput {
   zipPath: string;
   entryName?: string;
   topPercents?: number[];
+}
+
+export type RStatusToolInput = Omit<CheckRRuntimeInput, "runRScript">;
+
+export type PnadcRDownloadToolInput = Omit<DownloadPnadcWithRInput, "runRScript">;
+
+export type DatazoomPnadcLoadToolInput = Omit<LoadDatazoomPnadcWithRInput, "runRScript">;
+
+export interface RToolOptions {
+  runRScript?: RunRScript;
 }
 
 export interface ZipEntriesInput {
@@ -372,6 +394,39 @@ export async function pnadcAnalyzeZipTool(
   });
   return {
     markdown: formatPnadcSummaryMarkdown(result, [`ZIP entry: ${result.zipEntryName}`]),
+    structured: result,
+  };
+}
+
+export async function rStatusTool(
+  input: RStatusToolInput = {},
+  options: RToolOptions = {}
+): Promise<ToolResult<RRuntimeStatus>> {
+  const result = await checkRRuntime({ ...input, ...options });
+  return {
+    markdown: formatRStatusMarkdown(result),
+    structured: result,
+  };
+}
+
+export async function pnadcRDownloadTool(
+  input: PnadcRDownloadToolInput,
+  options: RToolOptions = {}
+): Promise<ToolResult<PnadcRDownloadOutput>> {
+  const result = await downloadPnadcWithR({ ...input, ...options });
+  return {
+    markdown: formatPnadcRDownloadMarkdown(result),
+    structured: result,
+  };
+}
+
+export async function datazoomPnadcLoadTool(
+  input: DatazoomPnadcLoadToolInput,
+  options: RToolOptions = {}
+): Promise<ToolResult<DatazoomPnadcLoadOutput>> {
+  const result = await loadDatazoomPnadcWithR({ ...input, ...options });
+  return {
+    markdown: formatDatazoomPnadcLoadMarkdown(result),
     structured: result,
   };
 }
@@ -868,6 +923,81 @@ function formatPnadcSummaryMarkdown(
     }
   }
   return lines.join("\n");
+}
+
+function formatRStatusMarkdown(result: RRuntimeStatus): string {
+  const lines = [
+    "# IBGE R Runtime Status",
+    "",
+    `Rscript: ${result.rscriptBin}`,
+    `R version: ${result.rVersion ?? "unknown"}`,
+    `Ready: ${result.ok ? "yes" : "no"}`,
+    "",
+    "Packages:",
+  ];
+
+  for (const packageStatus of result.packages) {
+    lines.push(
+      `- **${packageStatus.name}**: ${packageStatus.installed ? packageStatus.version ?? "installed" : "missing"}`
+    );
+  }
+
+  if (result.missingPackages.length > 0) {
+    lines.push("", `Missing packages: ${result.missingPackages.join(", ")}`);
+  }
+
+  return lines.join("\n");
+}
+
+function formatPnadcRDownloadMarkdown(result: PnadcRDownloadOutput): string {
+  return [
+    "# PNADcIBGE Export",
+    "",
+    `Year: ${result.year}`,
+    `Selector: ${formatPnadcSelector(result)}`,
+    `Output path: ${result.outputPath}`,
+    `Output format: ${result.outputFormat}`,
+    `Rows: ${result.rows ?? "unknown"}`,
+    `Columns: ${result.columns.join(", ")}`,
+    `R packages: ${formatPackageVersions(result.packageVersions)}`,
+  ].join("\n");
+}
+
+function formatDatazoomPnadcLoadMarkdown(result: DatazoomPnadcLoadOutput): string {
+  const lines = [
+    "# Data Zoom PNADc Export",
+    "",
+    `Output directory: ${result.outputDir}`,
+    `Years: ${result.years.join(", ")}`,
+    `Quarters: ${result.quarters.join(", ")}`,
+    `Panel: ${result.panel}`,
+    `Raw data: ${result.rawData ? "yes" : "no"}`,
+    `Output format: ${result.outputFormat}`,
+    `Save quarterly files: ${result.saveQuarterly ? "yes" : "no"}`,
+    `R packages: ${formatPackageVersions(result.packageVersions)}`,
+    "",
+    "Files:",
+  ];
+
+  for (const file of result.files) {
+    lines.push(`- **${file.relativePath ?? file.path}**: ${file.bytes} bytes`);
+    lines.push(`  - ${file.path}`);
+  }
+
+  return lines.join("\n");
+}
+
+function formatPnadcSelector(result: PnadcRDownloadOutput): string {
+  if (result.quarter !== undefined) return `quarter ${result.quarter}`;
+  if (result.interview !== undefined) return `interview ${result.interview}`;
+  if (result.topic !== undefined) return `topic ${result.topic}`;
+  return "unknown";
+}
+
+function formatPackageVersions(packageVersions: Record<string, string>): string {
+  const entries = Object.entries(packageVersions);
+  if (entries.length === 0) return "unknown";
+  return entries.map(([name, version]) => `${name} ${version}`).join(", ");
 }
 
 function pofMicrodataArchives(): DirectoryEntry[] {
