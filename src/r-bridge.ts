@@ -431,6 +431,7 @@ write_output <- function(data, output_path, output_format, design) {
 
 run_pnadc_get <- function() {
   ensure_package("PNADcIBGE")
+  suppressPackageStartupMessages(library("PNADcIBGE"))
   args <- list(
     year = input$year,
     selected = isTRUE(input$selected),
@@ -440,6 +441,7 @@ run_pnadc_get <- function() {
     reload = isTRUE(input$reload),
     savedir = if (is.null(input$savedir)) tempdir() else input$savedir
   )
+  dir.create(args$savedir, recursive = TRUE, showWarnings = FALSE)
   if (!is.null(input$quarter)) args$quarter <- input$quarter
   if (!is.null(input$interview)) args$interview <- input$interview
   if (!is.null(input$topic)) args$topic <- input$topic

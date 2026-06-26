@@ -48,7 +48,9 @@ describe("R bridge", () => {
 
   it("calls PNADcIBGE through R and saves a Parquet file", async () => {
     const calls: Array<Record<string, unknown>> = [];
-    const runRScript: RunRScript = async (_script, inputJson) => {
+    const scripts: string[] = [];
+    const runRScript: RunRScript = async (script, inputJson) => {
+      scripts.push(script);
       const input = JSON.parse(inputJson) as Record<string, unknown>;
       calls.push(input);
       return JSON.stringify({
@@ -68,10 +70,13 @@ describe("R bridge", () => {
       quarter: 4,
       vars: ["UF", "VD4019"],
       outputPath: "/tmp/pnadc-2024q4.parquet",
+      savedir: "/tmp/pnadc-cache",
       rscriptBin: "Rscript",
       runRScript,
     });
 
+    expect(scripts[0]).toContain('library("PNADcIBGE")');
+    expect(scripts[0]).toContain("dir.create(args$savedir, recursive = TRUE, showWarnings = FALSE)");
     expect(calls).toEqual([
       {
         action: "pnadc_get",
@@ -85,7 +90,7 @@ describe("R bridge", () => {
         deflator: true,
         design: false,
         reload: true,
-        savedir: null,
+        savedir: "/tmp/pnadc-cache",
         defyear: null,
         defperiod: null,
       },
