@@ -18,6 +18,8 @@ import {
   fixedWidthFileToParquetTool,
   fixedWidthZipToParquetTool,
   inspectLayoutTool,
+  metadataArchitectureExportTool,
+  metadataDictionaryExportTool,
   metadataInventoryTool,
   metadataSearchTool,
   pnadcAnalyzeFileTool,
@@ -181,6 +183,13 @@ const metadataSearchSchema = metadataInventorySchema.extend({
     .optional()
     .describe("Maximum variable matches to return. Defaults to 100 and is capped at 1000."),
 }).omit({ search: true });
+
+const metadataCsvExportSchema = metadataInventorySchema.extend({
+  outputPath: z
+    .string()
+    .min(1)
+    .describe("Local destination path for the CSV file to create."),
+});
 
 const inspectLayoutSchema = z.object({
   layoutPath: z
@@ -847,6 +856,32 @@ Use this when choosing selectedVariables for conversion, finding survey weights,
       annotations: READ_ONLY,
     },
     async (args) => toMcpResult(await metadataSearchTool(args))
+  );
+
+  server.registerTool(
+    "ibge_microdata_export_architecture_csv",
+    {
+      title: "Export IBGE Architecture CSV",
+      description: `Parse local official IBGE dictionaries/layouts or documentation ZIPs and write a Base dos Dados-style architecture CSV.
+
+The output is one row per parsed variable with source, record/table, variable name, type, fixed-width position, width, description, and category count. This is a local documentation artifact inspired by Base dos Dados workflows; it does not upload to BigQuery or require Base dos Dados credentials.`,
+      inputSchema: metadataCsvExportSchema.shape,
+      annotations: LOCAL_WRITE,
+    },
+    async (args) => toMcpResult(await metadataArchitectureExportTool(args))
+  );
+
+  server.registerTool(
+    "ibge_microdata_export_dictionary_csv",
+    {
+      title: "Export IBGE Dictionary CSV",
+      description: `Parse local official IBGE dictionaries/layouts or documentation ZIPs and write a Base dos Dados-style dicionario.csv.
+
+The output is one row per parsed value label/category with source, record/table, variable name, code/value, and label. This is a local documentation artifact inspired by Base dos Dados workflows; it does not upload to BigQuery or require Base dos Dados credentials.`,
+      inputSchema: metadataCsvExportSchema.shape,
+      annotations: LOCAL_WRITE,
+    },
+    async (args) => toMcpResult(await metadataDictionaryExportTool(args))
   );
 
   server.registerTool(

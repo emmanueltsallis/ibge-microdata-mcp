@@ -58,7 +58,32 @@ ibge_microdata_zip_entries({
 })
 ```
 
-## 6. Inspect The Fixed-Width Layout
+## 6. Inventory And Export Metadata
+
+```text
+ibge_microdata_metadata_inventory({
+  "zipPaths": ["/Users/you/.cache/ibge-microdata-mcp/ftp.ibge.gov.br/path/to/public/documentation.zip"],
+  "variableLimit": 50
+})
+```
+
+```text
+ibge_microdata_export_architecture_csv({
+  "zipPaths": ["/Users/you/.cache/ibge-microdata-mcp/ftp.ibge.gov.br/path/to/public/documentation.zip"],
+  "outputPath": "/Users/you/.cache/ibge-microdata-mcp/extra/architecture/variables.csv"
+})
+```
+
+```text
+ibge_microdata_export_dictionary_csv({
+  "zipPaths": ["/Users/you/.cache/ibge-microdata-mcp/ftp.ibge.gov.br/path/to/public/documentation.zip"],
+  "outputPath": "/Users/you/.cache/ibge-microdata-mcp/extra/dicionario.csv"
+})
+```
+
+The CSV exports are local documentation files inspired by Base dos Dados workflows. They do not upload anything to BigQuery.
+
+## 7. Inspect The Fixed-Width Layout
 
 ```text
 ibge_microdata_inspect_layout({
@@ -68,7 +93,7 @@ ibge_microdata_inspect_layout({
 })
 ```
 
-## 7. Convert Selected Columns To Parquet
+## 8. Convert Selected Columns To Parquet
 
 ```text
 ibge_microdata_fixed_width_zip_to_parquet({
@@ -80,7 +105,7 @@ ibge_microdata_fixed_width_zip_to_parquet({
 })
 ```
 
-## 8. Profile The Parquet Output
+## 9. Profile The Parquet Output
 
 ```text
 ibge_microdata_profile_parquet_views({
@@ -96,7 +121,7 @@ ibge_microdata_profile_parquet_views({
 })
 ```
 
-## 9. Query With DuckDB
+## 10. Query With DuckDB
 
 ```text
 ibge_microdata_query_parquet({
@@ -106,7 +131,7 @@ ibge_microdata_query_parquet({
 })
 ```
 
-## 10. Optional Weighted Distribution
+## 11. Optional Weighted Distribution
 
 ```text
 ibge_microdata_weighted_distribution({
@@ -124,7 +149,7 @@ ibge_microdata_weighted_distribution({
 })
 ```
 
-## 11. Optional Harmonization Recipe
+## 12. Optional Harmonization Recipe
 
 Use a recipe when assumptions should be explicit, versioned, and reusable. See [harmonization-recipe.json](harmonization-recipe.json) for the JSON structure.
 

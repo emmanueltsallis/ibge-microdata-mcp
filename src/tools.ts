@@ -35,6 +35,12 @@ import {
   type MetadataVariableSearchInput,
   type MetadataVariableSearchOutput,
 } from "./metadata.js";
+import {
+  exportMetadataArchitectureCsv,
+  exportMetadataDictionaryCsv,
+  type BaseDosDadosStyleExportInput,
+  type BaseDosDadosStyleExportOutput,
+} from "./bd-export.js";
 import { summarizePnadcTextFile, type SummarizePnadcTextFileOutput } from "./pnadc-file.js";
 import { summarizePnadcZipFile, type SummarizePnadcZipFileOutput } from "./pnadc-zip.js";
 import {
@@ -140,6 +146,10 @@ export interface InspectLayoutToolInput {
 export type MetadataInventoryToolInput = MetadataInventoryInput;
 
 export type MetadataVariableSearchToolInput = MetadataVariableSearchInput;
+
+export type MetadataArchitectureExportToolInput = BaseDosDadosStyleExportInput;
+
+export type MetadataDictionaryExportToolInput = BaseDosDadosStyleExportInput;
 
 export interface RemoteFileInfoInput {
   url: string;
@@ -369,6 +379,26 @@ export async function metadataSearchTool(
   const result = await searchMetadataVariables(input);
   return {
     markdown: formatMetadataSearchMarkdown(result),
+    structured: result,
+  };
+}
+
+export async function metadataArchitectureExportTool(
+  input: MetadataArchitectureExportToolInput
+): Promise<ToolResult<BaseDosDadosStyleExportOutput>> {
+  const result = await exportMetadataArchitectureCsv(input);
+  return {
+    markdown: formatBaseDosDadosStyleExportMarkdown(result, "Architecture"),
+    structured: result,
+  };
+}
+
+export async function metadataDictionaryExportTool(
+  input: MetadataDictionaryExportToolInput
+): Promise<ToolResult<BaseDosDadosStyleExportOutput>> {
+  const result = await exportMetadataDictionaryCsv(input);
+  return {
+    markdown: formatBaseDosDadosStyleExportMarkdown(result, "Dictionary"),
     structured: result,
   };
 }
@@ -777,6 +807,23 @@ function formatMetadataSearchMarkdown(result: MetadataVariableSearchOutput): str
   }
 
   return lines.join("\n");
+}
+
+function formatBaseDosDadosStyleExportMarkdown(
+  result: BaseDosDadosStyleExportOutput,
+  kind: "Architecture" | "Dictionary"
+): string {
+  return [
+    `# Base dos Dados-style ${kind} CSV`,
+    "",
+    `Output path: ${result.outputPath}`,
+    `Rows written: ${result.rowsWritten}`,
+    `Parsed sources: ${result.parsedSources}`,
+    `Records: ${result.records}`,
+    `Variables: ${result.variables}`,
+    `Truncated: ${result.truncated ? "yes" : "no"}`,
+    ...(result.warnings.length > 0 ? ["", "Warnings:", ...result.warnings.map((warning) => `- ${warning}`)] : []),
+  ].join("\n");
 }
 
 function formatInspectLayoutMarkdown(result: InspectLayoutOutput): string {

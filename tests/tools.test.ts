@@ -17,6 +17,8 @@ import {
   fixedWidthFileToParquetTool,
   fixedWidthZipToParquetTool,
   inspectLayoutTool,
+  metadataArchitectureExportTool,
+  metadataDictionaryExportTool,
   listCachedFilesTool,
   listDirectoryTool,
   listFilesTool,
@@ -243,6 +245,38 @@ format UF $UFFMT.;
     });
     expect(search.structured.matches.map((match) => match.variable.name)).toEqual(["UF"]);
     expect(search.markdown).toContain("IBGE Metadata Variable Search");
+  });
+
+  it("exports Base dos Dados-style metadata CSV files", async () => {
+    const layoutPath = path.join(tempDir, "input.txt");
+    const architecturePath = path.join(tempDir, "extra", "architecture", "variables.csv");
+    const dictionaryPath = path.join(tempDir, "extra", "dicionario.csv");
+    await writeFile(
+      layoutPath,
+      `
+proc format;
+value $UFFMT
+  '11' = 'Rondônia'
+;
+label UF = "Unidade da Federação";
+@0001 UF      $CHAR2.
+format UF $UFFMT.;
+`
+    );
+
+    const architecture = await metadataArchitectureExportTool({
+      paths: [layoutPath],
+      outputPath: architecturePath,
+    });
+    const dictionary = await metadataDictionaryExportTool({
+      paths: [layoutPath],
+      outputPath: dictionaryPath,
+    });
+
+    expect(architecture.structured.rowsWritten).toBe(1);
+    expect(architecture.markdown).toContain("Base dos Dados-style Architecture CSV");
+    expect(dictionary.structured.rowsWritten).toBe(1);
+    expect(dictionary.markdown).toContain("Base dos Dados-style Dictionary CSV");
   });
 });
 

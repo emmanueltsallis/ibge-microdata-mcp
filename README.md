@@ -38,6 +38,8 @@ In plain terms:
 | `ibge_microdata_inspect_layout` | Parse a local IBGE fixed-width input layout and search variables. |
 | `ibge_microdata_metadata_inventory` | Parse local dictionaries/layouts or documentation ZIPs into records, variables, positions, types, and value labels. |
 | `ibge_microdata_search_variables` | Search local official metadata for variable names, descriptions, and parsed value labels/categories. |
+| `ibge_microdata_export_architecture_csv` | Export parsed official metadata to a local Base dos Dados-style architecture CSV. |
+| `ibge_microdata_export_dictionary_csv` | Export parsed official value labels/categories to a local Base dos Dados-style `dicionario.csv`. |
 | `ibge_microdata_fixed_width_file_to_parquet` | Convert a fixed-width TXT file plus official layout into a local Parquet file. |
 | `ibge_microdata_fixed_width_zip_to_parquet` | Convert one fixed-width TXT entry inside a ZIP directly into local Parquet. |
 | `ibge_microdata_query_parquet` | Run bounded read-only DuckDB SQL over local Parquet files exposed as `microdata`. |
@@ -296,7 +298,25 @@ ibge_microdata_search_variables({
 
 The metadata tools parse official SAS/TXT input layouts, POF-style Excel dictionaries, generic Excel dictionary tables, and plain-text dictionary tables with recognizable position/width/variable columns. When available, they return value labels/categories such as state codes or response categories. If a file cannot be parsed, the inventory reports which parser attempts were tried.
 
-8. Inspect a fixed-width layout directly when you already have the layout file:
+8. Export Base dos Dados-style local documentation CSVs when you want portable metadata files:
+
+```text
+ibge_microdata_export_architecture_csv({
+  "zipPaths": ["/Users/you/.cache/ibge-microdata-mcp/ftp.ibge.gov.br/path/to/public/documentation.zip"],
+  "outputPath": "/Users/you/.cache/ibge-microdata-mcp/extra/architecture/variables.csv"
+})
+```
+
+```text
+ibge_microdata_export_dictionary_csv({
+  "zipPaths": ["/Users/you/.cache/ibge-microdata-mcp/ftp.ibge.gov.br/path/to/public/documentation.zip"],
+  "outputPath": "/Users/you/.cache/ibge-microdata-mcp/extra/dicionario.csv"
+})
+```
+
+The architecture export writes one row per parsed variable. The dictionary export writes one row per parsed category/code label. These are local documentation artifacts inspired by Base dos Dados workflows; they do not upload anything to BigQuery and do not require Base dos Dados credentials.
+
+9. Inspect a fixed-width layout directly when you already have the layout file:
 
 ```text
 ibge_microdata_inspect_layout({
@@ -306,7 +326,7 @@ ibge_microdata_inspect_layout({
 })
 ```
 
-9. Convert selected variables to Parquet:
+10. Convert selected variables to Parquet:
 
 ```text
 ibge_microdata_fixed_width_zip_to_parquet({
@@ -318,7 +338,7 @@ ibge_microdata_fixed_width_zip_to_parquet({
 })
 ```
 
-10. Profile the Parquet file before writing custom SQL:
+11. Profile the Parquet file before writing custom SQL:
 
 ```text
 ibge_microdata_profile_parquet_views({
@@ -336,7 +356,7 @@ ibge_microdata_profile_parquet_views({
 
 If `columns` is omitted, the tool profiles the first 25 columns by default. This keeps wide microdata files manageable while still giving enough information to choose variables and write queries.
 
-11. Query the Parquet file with DuckDB:
+12. Query the Parquet file with DuckDB:
 
 ```text
 ibge_microdata_query_parquet({

@@ -52,6 +52,8 @@ describe("public repository readiness", () => {
     expect(readme).toContain("ibge_microdata_discover_metadata");
     expect(readme).toContain("ibge_microdata_metadata_inventory");
     expect(readme).toContain("ibge_microdata_search_variables");
+    expect(readme).toContain("ibge_microdata_export_architecture_csv");
+    expect(readme).toContain("ibge_microdata_export_dictionary_csv");
     expect(readme).toContain("ibge_microdata_validate_recipe");
     expect(readme).toContain("ibge_microdata_apply_recipe");
     expect(readme).toContain("ibge_microdata_r_status");
@@ -68,6 +70,8 @@ describe("public repository readiness", () => {
     expect(serverSource).toContain("ibge_microdata_discover_metadata");
     expect(serverSource).toContain("ibge_microdata_metadata_inventory");
     expect(serverSource).toContain("ibge_microdata_search_variables");
+    expect(serverSource).toContain("ibge_microdata_export_architecture_csv");
+    expect(serverSource).toContain("ibge_microdata_export_dictionary_csv");
     expect(serverSource).toContain("ibge_microdata_r_status");
     expect(serverSource).toContain("ibge_microdata_pnadc_r_download");
     expect(serverSource).toContain("ibge_microdata_datazoom_pnadc_load");
