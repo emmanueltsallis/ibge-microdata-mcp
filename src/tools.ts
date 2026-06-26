@@ -6,7 +6,9 @@ import {
   type RemoteFileInfo,
 } from "./http.js";
 import {
+  cleanupCachedFiles,
   listCachedFiles,
+  type CleanupCachedFilesOutput,
   type ListCachedFilesOutput,
 } from "./cache.js";
 import {
@@ -114,6 +116,14 @@ export interface ListCachedFilesToolInput {
   cacheRoot: string;
   limit?: number;
   offset?: number;
+}
+
+export interface CleanupCachedFilesToolInput {
+  cacheRoot: string;
+  dryRun?: boolean;
+  olderThanDays?: number;
+  minBytes?: number;
+  urlPrefix?: string;
 }
 
 export interface PnadcAnalyzeFileInput {
@@ -311,6 +321,16 @@ export async function listCachedFilesTool(
   const result = await listCachedFiles(input);
   return {
     markdown: formatCacheMarkdown(result),
+    structured: result,
+  };
+}
+
+export async function cleanupCachedFilesTool(
+  input: CleanupCachedFilesToolInput
+): Promise<ToolResult<CleanupCachedFilesOutput>> {
+  const result = await cleanupCachedFiles(input);
+  return {
+    markdown: formatCleanupCacheMarkdown(result),
     structured: result,
   };
 }
@@ -596,6 +616,36 @@ function formatCacheMarkdown(result: ListCachedFilesOutput): string {
   lines.push("");
   for (const file of result.files) {
     lines.push(`- **${file.relativePath}**: ${file.bytes} bytes, modified ${file.modifiedAt}`);
+    lines.push(`  - ${file.url}`);
+    lines.push(`  - ${file.path}`);
+  }
+
+  return lines.join("\n");
+}
+
+function formatCleanupCacheMarkdown(result: CleanupCachedFilesOutput): string {
+  const lines = [
+    result.dryRun ? "# IBGE Cache Cleanup Preview" : "# IBGE Cache Cleanup Result",
+    "",
+    `Cache root: ${result.cacheRoot}`,
+    `Dry run: ${result.dryRun ? "yes" : "no"}`,
+    `Matched files: ${result.matchedCount}`,
+    `Deleted files: ${result.deletedCount}`,
+    `Matched bytes: ${result.matchedBytes}`,
+    `Deleted bytes: ${result.deletedBytes}`,
+  ];
+
+  if (result.dryRun) {
+    lines.push("No files were deleted because dryRun is true.");
+  }
+
+  lines.push("");
+  for (const file of result.files) {
+    lines.push(
+      `- **${file.relativePath}**: ${file.bytes} bytes, modified ${file.modifiedAt}, deleted=${
+        file.deleted ? "yes" : "no"
+      }`
+    );
     lines.push(`  - ${file.url}`);
     lines.push(`  - ${file.path}`);
   }

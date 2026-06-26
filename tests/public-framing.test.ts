@@ -11,6 +11,8 @@ describe("public repository framing", () => {
 
     expect(readme).toContain("## Core Generic Tools");
     expect(readme).toContain("## Optional Survey-Specific Helpers");
+    expect(readme).toContain("ibge_microdata_cleanup_cache");
+    expect(readme).toContain("dryRun");
     expect(readme).toContain("ibge_microdata_weighted_distribution");
     expect(readme).toContain("valueColumn");
     expect(readme).toContain("weightColumn");

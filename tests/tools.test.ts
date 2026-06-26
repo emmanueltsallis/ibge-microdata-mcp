@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as XLSX from "xlsx";
 
 import {
+  cleanupCachedFilesTool,
   describeParquetViewsTool,
   discoverMicrodataTool,
   downloadFileTool,
@@ -215,6 +216,31 @@ describe("listCachedFilesTool", () => {
     });
     expect(result.markdown).toContain("IBGE Local Cache");
     expect(result.markdown).toContain("https://ftp.ibge.gov.br/Some/Survey/Dados.zip");
+  });
+});
+
+describe("cleanupCachedFilesTool", () => {
+  it("wraps cache cleanup preview for MCP-friendly output", async () => {
+    const cachedPath = path.join(tempDir, "ftp.ibge.gov.br", "Some", "Survey", "Large.zip");
+    await mkdir(path.dirname(cachedPath), { recursive: true });
+    await writeFile(cachedPath, "large cached file");
+
+    const result = await cleanupCachedFilesTool({
+      cacheRoot: tempDir,
+      minBytes: 10,
+      dryRun: true
+    });
+
+    expect(result.structured.dryRun).toBe(true);
+    expect(result.structured.matchedCount).toBe(1);
+    expect(result.structured.deletedCount).toBe(0);
+    expect(result.structured.files[0]).toMatchObject({
+      url: "https://ftp.ibge.gov.br/Some/Survey/Large.zip",
+      deleted: false
+    });
+    expect(result.markdown).toContain("IBGE Cache Cleanup Preview");
+    expect(result.markdown).toContain("Matched files: 1");
+    expect(result.markdown).toContain("Deleted files: 0");
   });
 });
 

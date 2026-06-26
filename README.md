@@ -28,6 +28,7 @@ In plain terms:
 | `ibge_microdata_file_info` | Read file size, type, update timestamp, and validators with HTTP HEAD. |
 | `ibge_microdata_download_file` | Download or reuse one official IBGE file in a local cache. |
 | `ibge_microdata_list_cache` | List files already downloaded into a local cache with URLs, paths, sizes, and timestamps. |
+| `ibge_microdata_cleanup_cache` | Preview or delete selected cached files using safe filters. |
 | `ibge_microdata_zip_entries` | List files inside a local ZIP archive without extracting all of it. |
 | `ibge_microdata_extract_zip_entry` | Extract one selected ZIP entry to a local path. |
 | `ibge_microdata_inspect_layout` | Parse a local IBGE fixed-width input layout and search variables. |
@@ -140,7 +141,20 @@ ibge_microdata_list_cache({
 })
 ```
 
-5. Inspect archive contents:
+5. Preview cache cleanup when storage grows:
+
+```text
+ibge_microdata_cleanup_cache({
+  "cacheRoot": "/Users/you/.cache/ibge-microdata-mcp",
+  "dryRun": true,
+  "olderThanDays": 30,
+  "minBytes": 100000000
+})
+```
+
+The cleanup tool defaults to `dryRun: true`, requires at least one filter, and only considers files under `cacheRoot/ftp.ibge.gov.br`. Set `dryRun: false` only after reviewing the preview.
+
+6. Inspect archive contents:
 
 ```text
 ibge_microdata_zip_entries({
@@ -148,7 +162,7 @@ ibge_microdata_zip_entries({
 })
 ```
 
-6. Inspect a fixed-width layout and choose variables:
+7. Inspect a fixed-width layout and choose variables:
 
 ```text
 ibge_microdata_inspect_layout({
@@ -158,7 +172,7 @@ ibge_microdata_inspect_layout({
 })
 ```
 
-7. Convert selected variables to Parquet:
+8. Convert selected variables to Parquet:
 
 ```text
 ibge_microdata_fixed_width_zip_to_parquet({
@@ -170,7 +184,7 @@ ibge_microdata_fixed_width_zip_to_parquet({
 })
 ```
 
-8. Profile the Parquet file before writing custom SQL:
+9. Profile the Parquet file before writing custom SQL:
 
 ```text
 ibge_microdata_profile_parquet_views({
@@ -188,7 +202,7 @@ ibge_microdata_profile_parquet_views({
 
 If `columns` is omitted, the tool profiles the first 25 columns by default. This keeps wide microdata files manageable while still giving enough information to choose variables and write queries.
 
-9. Query the Parquet file with DuckDB:
+10. Query the Parquet file with DuckDB:
 
 ```text
 ibge_microdata_query_parquet({

@@ -3,6 +3,7 @@ import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import {
+  cleanupCachedFilesTool,
   describeParquetViewsTool,
   discoverMicrodataTool,
   listFilesTool,
@@ -39,6 +40,13 @@ const READ_ONLY: ToolAnnotations = {
 const LOCAL_WRITE: ToolAnnotations = {
   readOnlyHint: false,
   destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: true,
+};
+
+const LOCAL_DESTRUCTIVE: ToolAnnotations = {
+  readOnlyHint: false,
+  destructiveHint: true,
   idempotentHint: true,
   openWorldHint: true,
 };
@@ -144,6 +152,34 @@ const listCacheSchema = z.object({
     .min(0)
     .optional()
     .describe("Number of cached files to skip for pagination. Defaults to 0."),
+});
+
+const cleanupCacheSchema = z.object({
+  cacheRoot: z
+    .string()
+    .min(1)
+    .describe("Local cache root previously used with ibge_microdata_download_file."),
+  dryRun: z
+    .boolean()
+    .optional()
+    .describe("Preview matching files without deleting them. Defaults to true."),
+  olderThanDays: z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe("Only match cached files modified at least this many days ago."),
+  minBytes: z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe("Only match cached files at least this many bytes large."),
+  urlPrefix: z
+    .string()
+    .url()
+    .optional()
+    .describe("Only match cached files whose official source URL starts with this ftp.ibge.gov.br prefix."),
 });
 
 const pnadcAnalyzeFileSchema = z.object({
@@ -556,6 +592,19 @@ Use this after one or more ibge_microdata_download_file calls to rediscover loca
       annotations: READ_ONLY,
     },
     async (args) => toMcpResult(await listCachedFilesTool(args))
+  );
+
+  server.registerTool(
+    "ibge_microdata_cleanup_cache",
+    {
+      title: "Cleanup Local IBGE Cache",
+      description: `Preview or delete selected files from the local IBGE microdata cache.
+
+The tool only considers files under cacheRoot/ftp.ibge.gov.br and requires at least one filter such as olderThanDays, minBytes, or urlPrefix. It defaults to dryRun=true, so use it first to preview what would be deleted. Set dryRun=false only after the user explicitly agrees to delete the matched cached files.`,
+      inputSchema: cleanupCacheSchema.shape,
+      annotations: LOCAL_DESTRUCTIVE,
+    },
+    async (args) => toMcpResult(await cleanupCachedFilesTool(args))
   );
 
   server.registerTool(

@@ -37,7 +37,20 @@ ibge_microdata_download_file({
 })
 ```
 
-## 4. Inspect Archive Entries
+## 4. Preview Cache Cleanup
+
+```text
+ibge_microdata_cleanup_cache({
+  "cacheRoot": "/Users/you/.cache/ibge-microdata-mcp",
+  "dryRun": true,
+  "olderThanDays": 30,
+  "minBytes": 100000000
+})
+```
+
+Use `dryRun: true` first. The tool requires at least one filter and only considers files under the mirrored `ftp.ibge.gov.br` cache tree.
+
+## 5. Inspect Archive Entries
 
 ```text
 ibge_microdata_zip_entries({
@@ -45,7 +58,7 @@ ibge_microdata_zip_entries({
 })
 ```
 
-## 5. Inspect The Fixed-Width Layout
+## 6. Inspect The Fixed-Width Layout
 
 ```text
 ibge_microdata_inspect_layout({
@@ -55,7 +68,7 @@ ibge_microdata_inspect_layout({
 })
 ```
 
-## 6. Convert Selected Columns To Parquet
+## 7. Convert Selected Columns To Parquet
 
 ```text
 ibge_microdata_fixed_width_zip_to_parquet({
@@ -67,7 +80,7 @@ ibge_microdata_fixed_width_zip_to_parquet({
 })
 ```
 
-## 7. Profile The Parquet Output
+## 8. Profile The Parquet Output
 
 ```text
 ibge_microdata_profile_parquet_views({
@@ -83,7 +96,7 @@ ibge_microdata_profile_parquet_views({
 })
 ```
 
-## 8. Query With DuckDB
+## 9. Query With DuckDB
 
 ```text
 ibge_microdata_query_parquet({
@@ -93,7 +106,7 @@ ibge_microdata_query_parquet({
 })
 ```
 
-## 9. Optional Weighted Distribution
+## 10. Optional Weighted Distribution
 
 ```text
 ibge_microdata_weighted_distribution({
