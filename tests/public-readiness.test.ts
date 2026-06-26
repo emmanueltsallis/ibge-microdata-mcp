@@ -43,6 +43,12 @@ describe("public repository readiness", () => {
     expect(readme).toContain("pnpm --version");
     expect(readme).toContain("Rscript --version");
     expect(readme).toContain("Rscript -e");
+    expect(readme).toContain("Generic MCP Client Setup");
+    expect(readme).toContain("Any MCP client that supports stdio can run this server");
+    expect(readme).toContain("Use an absolute path to `dist/index.js`");
+    expect(readme).toContain("MCP uses stdout for protocol messages");
+    expect(readme).toContain("restart or reload the client after changing MCP configuration");
+    expect(readme).toContain("node --input-type=module");
     expect(readme).toContain("PNADcIBGE");
     expect(readme).toContain("datazoom.social");
     expect(readme).toContain("examples/generic-workflow.md");

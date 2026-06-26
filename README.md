@@ -146,7 +146,11 @@ Rscript -e 'install.packages("datazoom.social", repos = c("https://datazoompuc.r
 node dist/index.js
 ```
 
-Example MCP client config:
+## Generic MCP Client Setup
+
+Any MCP client that supports stdio can run this server. After cloning, installing dependencies, and running `pnpm run build`, configure your client to start the built Node entrypoint.
+
+Use an absolute path to `dist/index.js` in client configuration. Most clients use the same basic shape:
 
 ```json
 {
@@ -158,6 +162,33 @@ Example MCP client config:
   }
 }
 ```
+
+If your client uses TOML or another config format, the same idea applies: `command` is the Node executable, and `args` contains the absolute path to this server's built `dist/index.js` file.
+
+Most MCP clients start configured servers when the app or session starts, so restart or reload the client after changing MCP configuration. If the tools do not appear immediately, restart the client first before debugging the server.
+
+MCP uses stdout for protocol messages. This server writes startup and fatal logs to stderr, which keeps stdio protocol traffic clean for clients.
+
+You can smoke-test the server independently of any specific client:
+
+```bash
+node --input-type=module - <<'NODE'
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+
+const transport = new StdioClientTransport({
+  command: 'node',
+  args: ['/absolute/path/to/ibge-microdata-mcp/dist/index.js'],
+});
+const client = new Client({ name: 'ibge-microdata-smoke', version: '0.0.0' });
+await client.connect(transport);
+const tools = await client.listTools();
+console.log(tools.tools.map((tool) => tool.name).sort().join('\n'));
+await client.close();
+NODE
+```
+
+The smoke test should list tools such as `ibge_microdata_list_surveys`, `ibge_microdata_metadata_inventory`, and `ibge_microdata_fixed_width_zip_to_parquet`.
 
 For a shorter generic walkthrough, see [examples/generic-workflow.md](examples/generic-workflow.md). For a starter harmonization recipe, see [examples/harmonization-recipe.json](examples/harmonization-recipe.json). For external harmonization sources that can inform recipes, see [docs/harmonization-sources.md](docs/harmonization-sources.md).
 
