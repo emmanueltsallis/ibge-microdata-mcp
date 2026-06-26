@@ -710,6 +710,9 @@ function formatMetadataInventoryMarkdown(result: MetadataInventoryOutput): strin
         source.message ? ` - ${source.message}` : ""
       }`
     );
+    for (const diagnostic of source.diagnostics ?? []) {
+      lines.push(`  - ${diagnostic.parser}: ${diagnostic.status} - ${diagnostic.message}`);
+    }
   }
 
   lines.push("", "## Records");

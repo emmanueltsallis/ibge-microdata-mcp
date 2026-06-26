@@ -8,6 +8,7 @@ import { listCachedFiles } from "../src/cache.js";
 import { PNADC_TRIMESTRAL_MICRODATA_URL, POF_MICRODATA_URL } from "../src/catalog.js";
 import { discoverMicrodataFiles } from "../src/discovery.js";
 import { fetchDirectoryEntries, getRemoteFileInfo, downloadRemoteFile } from "../src/http.js";
+import { buildMetadataInventory } from "../src/metadata.js";
 import { readPofDictionaryManifest } from "../src/pof.js";
 import { extractZipEntry, listZipEntries } from "../src/zip.js";
 
@@ -79,5 +80,9 @@ maybeDescribe("official IBGE smoke tests", () => {
     expect(manifest.records.some((record) => record.sheetName === "Domicílio" && record.dataEntryName === "DOMICILIO.txt")).toBe(
       true
     );
+
+    const inventory = await buildMetadataInventory({ zipPaths: [downloaded.path], variableLimit: 1 });
+    expect(inventory.parsedSources).toBeGreaterThan(0);
+    expect(inventory.records.some((record) => record.recordName === "Domicílio")).toBe(true);
   });
 });

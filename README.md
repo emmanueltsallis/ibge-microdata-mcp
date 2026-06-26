@@ -294,7 +294,7 @@ ibge_microdata_search_variables({
 })
 ```
 
-The metadata tools parse official SAS/TXT input layouts and POF-style Excel dictionaries. When available, they return value labels/categories such as state codes or response categories.
+The metadata tools parse official SAS/TXT input layouts, POF-style Excel dictionaries, generic Excel dictionary tables, and plain-text dictionary tables with recognizable position/width/variable columns. When available, they return value labels/categories such as state codes or response categories. If a file cannot be parsed, the inventory reports which parser attempts were tried.
 
 8. Inspect a fixed-width layout directly when you already have the layout file:
 
@@ -497,7 +497,7 @@ The R smoke test checks `Rscript` and baseline R package availability. It does n
 - This is a local-first MCP server, not a hosted warehouse of all IBGE microdata.
 - Discovery is deliberately bounded; broad root crawls should use explicit `maxDepth` and `maxDirectories` values to avoid excessive requests.
 - Generic fixed-width conversion, official metadata inventory/search, Parquet profiling/querying, weighted distribution summaries, and POF dictionary conversion are implemented.
-- Metadata parsing supports common IBGE SAS/TXT input layouts and POF-style Excel dictionaries. Other survey-specific dictionary formats may still need parser adapters.
+- Metadata parsing supports common IBGE SAS/TXT input layouts, POF-style Excel dictionaries, generic Excel dictionary tables, and generic TXT dictionary tables. PDF-only/prose-only codebooks and highly irregular historical layouts may still need parser adapters.
 - Additional survey-specific harmonized recipes can be added as optional layers without changing the generic workflow.
 
 ## License
