@@ -4,6 +4,8 @@ Local-first MCP server for discovering, downloading, unpacking, converting, quer
 
 This project does not host IBGE datasets. It uses IBGE download servers as the source of truth, downloads only files explicitly requested by the user, mirrors them into a local cache, and runs analysis on local files.
 
+IBGE's raw public download host is `ftp.ibge.gov.br`. The server accepts both `https://` and `http://` URLs for that host. It tries to keep official HTTPS URLs where possible, but can fall back to official HTTP for public files when HTTPS is slow or unavailable. Tool output reports the resolved URL, transport used, and SHA-256 hash after download.
+
 ## Why Local-First
 
 IBGE microdata files are public, but many are large enough that an MCP server should not return them directly in chat responses. The practical workflow is:
@@ -22,6 +24,7 @@ In plain terms:
 | Tool | Purpose |
 |---|---|
 | `ibge_microdata_list_surveys` | List survey families with convenience support. |
+| `ibge_microdata_connectivity_check` | Check whether this machine can reach IBGE download/API endpoints over HTTPS and HTTP. |
 | `ibge_microdata_list_files` | List known public archive files for supported survey families. |
 | `ibge_microdata_list_directory` | List any official `ftp.ibge.gov.br` directory. |
 | `ibge_microdata_discover` | Bounded crawl of official IBGE directories to find microdata, data, documentation, and layout files. |
@@ -193,6 +196,10 @@ ibge_microdata_list_surveys({})
 ```
 
 ```text
+ibge_microdata_connectivity_check({})
+```
+
+```text
 ibge_microdata_list_files({
   "survey": "pof"
 })
@@ -224,6 +231,8 @@ ibge_microdata_download_file({
 ```
 
 The downloader mirrors the official `ftp.ibge.gov.br` path under `cacheRoot`. On repeated calls, it checks IBGE `content-length` metadata first and returns a cache hit when the existing local file has the expected byte size.
+
+If HTTPS to `ftp.ibge.gov.br` times out, the downloader may retry the same public file over `http://ftp.ibge.gov.br`. This does not send credentials or private data; it only downloads public IBGE files. The response reports `transport`, `usedFallback`, and `sha256` so the transfer remains auditable in headless MCP use.
 
 4. List the cache later if you need to rediscover local paths:
 

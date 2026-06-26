@@ -1,5 +1,11 @@
 import path from "node:path";
-import { readdir, stat, unlink } from "node:fs/promises";
+import { readFile, readdir, stat, unlink } from "node:fs/promises";
+
+import {
+  isCacheMetadataPath,
+  metadataPathForDataPath,
+  type IbgeCacheMetadata,
+} from "./cache-metadata.js";
 
 export interface ListCachedFilesInput {
   cacheRoot: string;
@@ -21,6 +27,11 @@ export interface CachedFileInfo {
   url: string;
   bytes: number;
   modifiedAt: string;
+  resolvedUrl?: string;
+  transport?: "https" | "http";
+  usedFallback?: boolean;
+  sha256?: string;
+  downloadedAt?: string;
 }
 
 export interface CleanupCachedFileInfo extends CachedFileInfo {
@@ -118,6 +129,7 @@ export async function cleanupCachedFiles(input: CleanupCachedFilesInput): Promis
     const deleted = !dryRun;
     if (deleted) {
       await unlink(file.path);
+      await unlinkIfExists(metadataPathForDataPath(file.path));
       deletedCount += 1;
       deletedBytes += file.bytes;
     }
@@ -146,16 +158,23 @@ async function walkCachedFiles(cacheRoot: string, directoryPath: string): Promis
       continue;
     }
     if (!entry.isFile()) continue;
+    if (isCacheMetadataPath(entryPath)) continue;
 
     const stats = await stat(entryPath);
     const relativePath = path.relative(cacheRoot, entryPath).split(path.sep).join("/");
     const urlPath = relativePath.slice(`${CACHE_HOST}/`.length);
+    const metadata = await readCacheMetadata(entryPath);
     files.push({
       path: entryPath,
       relativePath,
-      url: `https://${CACHE_HOST}/${urlPath}`,
+      url: metadata?.sourceUrl ?? `https://${CACHE_HOST}/${urlPath}`,
       bytes: stats.size,
       modifiedAt: stats.mtime.toISOString(),
+      ...(metadata?.resolvedUrl ? { resolvedUrl: metadata.resolvedUrl } : {}),
+      ...(metadata?.transport ? { transport: metadata.transport } : {}),
+      ...(metadata ? { usedFallback: metadata.usedFallback } : {}),
+      ...(metadata?.sha256 ? { sha256: metadata.sha256 } : {}),
+      ...(metadata?.downloadedAt ? { downloadedAt: metadata.downloadedAt } : {}),
     });
   }
 
@@ -187,8 +206,11 @@ function normalizeCleanupFilters(input: CleanupCachedFilesInput): CleanupFilters
     filters.minBytes = input.minBytes;
   }
   if (input.urlPrefix !== undefined) {
-    if (!input.urlPrefix.startsWith(`https://${CACHE_HOST}/`)) {
-      throw new Error(`urlPrefix must start with https://${CACHE_HOST}/`);
+    if (
+      !input.urlPrefix.startsWith(`https://${CACHE_HOST}/`) &&
+      !input.urlPrefix.startsWith(`http://${CACHE_HOST}/`)
+    ) {
+      throw new Error(`urlPrefix must start with https://${CACHE_HOST}/ or http://${CACHE_HOST}/`);
     }
     filters.urlPrefix = input.urlPrefix;
   }
@@ -215,6 +237,36 @@ async function isDirectory(directoryPath: string): Promise<boolean> {
   } catch (error) {
     if (error instanceof Error && "code" in error && error.code === "ENOENT") {
       return false;
+    }
+    throw error;
+  }
+}
+
+async function readCacheMetadata(filePath: string): Promise<IbgeCacheMetadata | null> {
+  try {
+    const raw = await readFile(metadataPathForDataPath(filePath), "utf8");
+    const parsed = JSON.parse(raw) as Partial<IbgeCacheMetadata>;
+    if (typeof parsed.sourceUrl !== "string" || typeof parsed.sha256 !== "string") {
+      return null;
+    }
+    return parsed as IbgeCacheMetadata;
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+      return null;
+    }
+    if (error instanceof SyntaxError) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+async function unlinkIfExists(filePath: string): Promise<void> {
+  try {
+    await unlink(filePath);
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+      return;
     }
     throw error;
   }

@@ -8,6 +8,7 @@ import * as XLSX from "xlsx";
 import {
   applyHarmonizationRecipeTool,
   cleanupCachedFilesTool,
+  connectivityCheckTool,
   describeParquetViewsTool,
   discoverMicrodataTool,
   downloadFileTool,
@@ -56,6 +57,27 @@ describe("listSurveysTool", () => {
     const result = listSurveysTool();
     expect(result.structured.surveys.map((survey) => survey.id)).toEqual(["pnadc_trimestral", "pof"]);
     expect(result.markdown).toContain("PNAD Contínua Trimestral");
+  });
+});
+
+describe("connectivityCheckTool", () => {
+  it("reports machine-level IBGE endpoint reachability", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url === "https://ftp.ibge.gov.br/") {
+          throw new Error("Connect Timeout Error");
+        }
+
+        return new Response("ok", { status: 200, statusText: "OK" });
+      })
+    );
+
+    const result = await connectivityCheckTool({ timeoutMs: 1000 });
+
+    expect(result.structured.ok).toBe(true);
+    expect(result.markdown).toContain("IBGE Connectivity Check");
+    expect(result.markdown).toContain("IBGE FTP over HTTP");
   });
 });
 
@@ -176,6 +198,7 @@ describe("remoteFileInfoTool", () => {
       url: "https://ftp.ibge.gov.br/Orcamentos_Familiares/file.zip"
     });
     expect(result.structured.info.contentLength).toBe(146294013);
+    expect(result.markdown).toContain("Transport");
   });
 });
 
@@ -198,6 +221,7 @@ describe("downloadFileTool", () => {
 
     expect(result.structured.path).toBe(path.join(tempDir, "ftp.ibge.gov.br/path/file.txt"));
     expect(result.structured.cacheStatus).toBe("miss");
+    expect(result.markdown).toContain("Transport");
     expect(result.markdown).toContain("Downloaded");
     expect(result.markdown).toContain("Cache status: miss");
   });

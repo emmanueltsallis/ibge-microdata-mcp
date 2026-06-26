@@ -1,8 +1,11 @@
 import {
+  checkIbgeConnectivity,
   downloadRemoteFile,
   fetchDirectoryEntries,
   getRemoteFileInfo,
   type DownloadRemoteFileOutput,
+  type IbgeConnectivityInput,
+  type IbgeConnectivityOutput,
   type RemoteFileInfo,
 } from "./http.js";
 import {
@@ -96,6 +99,10 @@ export interface ListFilesOutput {
   sourceUrl: string;
   files: DirectoryEntry[];
 }
+
+export type IbgeConnectivityToolInput = IbgeConnectivityInput;
+
+export type IbgeConnectivityToolOutput = IbgeConnectivityOutput;
 
 export interface ListDirectoryInput {
   url: string;
@@ -261,6 +268,16 @@ export function listSurveysTool(): ToolResult<ListSurveysOutput> {
   };
 }
 
+export async function connectivityCheckTool(
+  input: IbgeConnectivityToolInput = {}
+): Promise<ToolResult<IbgeConnectivityToolOutput>> {
+  const result = await checkIbgeConnectivity(input);
+  return {
+    markdown: formatConnectivityMarkdown(result),
+    structured: result,
+  };
+}
+
 export async function listFilesTool(input: ListFilesInput): Promise<ToolResult<ListFilesOutput>> {
   if (input.survey === "pnadc_trimestral") {
     if (!input.year) {
@@ -320,6 +337,8 @@ export async function remoteFileInfoTool(
       "# IBGE Microdata File Metadata",
       "",
       `- URL: ${info.url}`,
+      `- Resolved URL: ${info.resolvedUrl}`,
+      `- Transport: ${info.transport}${info.usedFallback ? " (fallback)" : ""}`,
       `- Size: ${info.contentLength === null ? "unknown" : `${info.contentLength} bytes`}`,
       `- Type: ${info.contentType ?? "unknown"}`,
       `- Last modified: ${info.lastModified ?? "unknown"}`,
@@ -340,13 +359,38 @@ export async function downloadFileTool(
       title,
       "",
       `URL: ${result.url}`,
+      `Resolved URL: ${result.resolvedUrl}`,
+      `Transport: ${result.transport}${result.usedFallback ? " (fallback)" : ""}`,
       `Local path: ${result.path}`,
       `Cache status: ${result.cacheStatus}`,
       `Bytes: ${result.bytesWritten}`,
+      `SHA-256: ${result.sha256 ?? "unknown"}`,
       `Type: ${result.contentType ?? "unknown"}`,
     ].join("\n"),
     structured: result,
   };
+}
+
+function formatConnectivityMarkdown(result: IbgeConnectivityOutput): string {
+  return [
+    "# IBGE Connectivity Check",
+    "",
+    `Overall FTP access: ${result.ok ? "available" : "unavailable"}`,
+    `Timeout: ${result.timeoutMs} ms`,
+    "",
+    "| Endpoint | Status | Duration | Error |",
+    "| --- | ---: | ---: | --- |",
+    ...result.checks.map((check) =>
+      [
+        check.name,
+        check.status === null ? (check.ok ? "ok" : "failed") : `${check.status} ${check.statusText ?? ""}`.trim(),
+        `${check.durationMs} ms`,
+        check.error ?? "",
+      ].join(" | ")
+    ).map((row) => `| ${row} |`),
+    "",
+    "If HTTPS to ftp.ibge.gov.br is slow or unavailable, the downloader can use official HTTP URLs for public files and reports the transport used.",
+  ].join("\n");
 }
 
 export async function listCachedFilesTool(
@@ -704,6 +748,12 @@ function formatCacheMarkdown(result: ListCachedFilesOutput): string {
   for (const file of result.files) {
     lines.push(`- **${file.relativePath}**: ${file.bytes} bytes, modified ${file.modifiedAt}`);
     lines.push(`  - ${file.url}`);
+    if (file.resolvedUrl) lines.push(`  - Resolved URL: ${file.resolvedUrl}`);
+    if (file.transport) {
+      lines.push(`  - Transport: ${file.transport}${file.usedFallback ? " (fallback)" : ""}`);
+    }
+    if (file.sha256) lines.push(`  - SHA-256: ${file.sha256}`);
+    if (file.downloadedAt) lines.push(`  - Downloaded: ${file.downloadedAt}`);
     lines.push(`  - ${file.path}`);
   }
 
@@ -734,6 +784,7 @@ function formatCleanupCacheMarkdown(result: CleanupCachedFilesOutput): string {
       }`
     );
     lines.push(`  - ${file.url}`);
+    if (file.sha256) lines.push(`  - SHA-256: ${file.sha256}`);
     lines.push(`  - ${file.path}`);
   }
 

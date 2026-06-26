@@ -5,6 +5,7 @@ import { z } from "zod";
 import {
   applyHarmonizationRecipeTool,
   cleanupCachedFilesTool,
+  connectivityCheckTool,
   describeParquetViewsTool,
   discoverMicrodataTool,
   listFilesTool,
@@ -69,18 +70,28 @@ const listFilesSchema = z.object({
     .describe("Calendar year for PNAD Contínua quarterly files, e.g. 2024."),
 });
 
+const connectivityCheckSchema = z.object({
+  timeoutMs: z
+    .number()
+    .int()
+    .min(1_000)
+    .max(30_000)
+    .optional()
+    .describe("Per-endpoint connectivity timeout in milliseconds. Defaults to 8000."),
+});
+
 const remoteInfoSchema = z.object({
   url: z
     .string()
     .url()
-    .describe("Official ftp.ibge.gov.br file URL to inspect with HTTP HEAD."),
+    .describe("Official ftp.ibge.gov.br file URL to inspect with HTTP HEAD. HTTPS and HTTP are both supported."),
 });
 
 const listDirectorySchema = z.object({
   url: z
     .string()
     .url()
-    .describe("Official ftp.ibge.gov.br directory URL to list."),
+    .describe("Official ftp.ibge.gov.br directory URL to list. HTTPS and HTTP are both supported."),
 });
 
 const discoverMicrodataSchema = z.object({
@@ -88,7 +99,7 @@ const discoverMicrodataSchema = z.object({
     .string()
     .url()
     .optional()
-    .describe("Official ftp.ibge.gov.br directory URL where discovery should start. Defaults to the IBGE FTP root."),
+    .describe("Official ftp.ibge.gov.br directory URL where discovery should start. Defaults to the IBGE FTP root. HTTPS and HTTP are both supported."),
   maxDepth: z
     .number()
     .int()
@@ -132,7 +143,7 @@ const downloadFileSchema = z.object({
   url: z
     .string()
     .url()
-    .describe("Official ftp.ibge.gov.br file URL to download."),
+    .describe("Official ftp.ibge.gov.br file URL to download. HTTPS and HTTP are both supported; HTTPS requests may fall back to HTTP for public files."),
   cacheRoot: z
     .string()
     .min(1)
@@ -686,12 +697,25 @@ This tool lists URLs only; it does not download large ZIP files.`,
   );
 
   server.registerTool(
+    "ibge_microdata_connectivity_check",
+    {
+      title: "Check IBGE Connectivity",
+      description: `Check whether this machine can reach the official IBGE download and API endpoints.
+
+Use this when directory listing or downloading fails. It tests ftp.ibge.gov.br over HTTPS and HTTP, plus the main IBGE website and public service API, and reports timing/errors so users can distinguish local network issues from MCP parsing problems.`,
+      inputSchema: connectivityCheckSchema.shape,
+      annotations: READ_ONLY,
+    },
+    async (args) => toMcpResult(await connectivityCheckTool(args))
+  );
+
+  server.registerTool(
     "ibge_microdata_list_directory",
     {
       title: "List Official IBGE Directory",
       description: `List downloadable files in any official ftp.ibge.gov.br directory.
 
-Use this for IBGE microdata families that do not yet have a survey-specific convenience tool. It only lists links; it does not download file bodies.`,
+Use this for IBGE microdata families that do not yet have a survey-specific convenience tool. It only lists links; it does not download file bodies. If HTTPS is slow or unavailable, the underlying fetch can fall back to official HTTP for public files.`,
       inputSchema: listDirectorySchema.shape,
       annotations: READ_ONLY,
     },
@@ -704,7 +728,7 @@ Use this for IBGE microdata families that do not yet have a survey-specific conv
       title: "Discover Official IBGE Microdata Files",
       description: `Crawl official ftp.ibge.gov.br directories with strict limits to find public microdata directories, data ZIPs, and documentation/layout files.
 
-Use this when a survey-specific convenience listing is not implemented yet. The tool only fetches directory pages; it does not download microdata archives.`,
+Use this when a survey-specific convenience listing is not implemented yet. The tool only fetches directory pages; it does not download microdata archives. If HTTPS is slow or unavailable, the underlying fetch can fall back to official HTTP for public files.`,
       inputSchema: discoverMicrodataSchema.shape,
       annotations: READ_ONLY,
     },
@@ -730,7 +754,7 @@ Use this before converting fixed-width microdata to Parquet so you can choose se
       title: "Inspect IBGE Microdata File",
       description: `Fetch HTTP HEAD metadata for an official IBGE microdata file URL.
 
-Use this before downloading a large file to check its size, content type, update timestamp, and ETag.`,
+Use this before downloading a large file to check its size, content type, update timestamp, ETag, and which transport was used. HTTPS requests may fall back to HTTP for public IBGE files when HTTPS times out.`,
       inputSchema: remoteInfoSchema.shape,
       annotations: READ_ONLY,
     },
@@ -743,7 +767,7 @@ Use this before downloading a large file to check its size, content type, update
       title: "Download IBGE Microdata File",
       description: `Download or reuse a selected official IBGE microdata file in a local cache path.
 
-This is explicit and local-first: the tool mirrors the ftp.ibge.gov.br URL under cacheRoot, checks official HEAD content-length metadata, and skips re-downloading when a cached file has the expected byte size. Use ibge_microdata_file_info first for large files so the user understands size before downloading.`,
+This is explicit and local-first: the tool mirrors the ftp.ibge.gov.br URL under cacheRoot, checks official HEAD content-length metadata, and skips re-downloading when a cached file has the expected byte size. HTTPS requests may fall back to official HTTP for public files when HTTPS is slow or unavailable. Use ibge_microdata_file_info first for large files so the user understands size before downloading.`,
       inputSchema: downloadFileSchema.shape,
       annotations: READ_ONLY,
     },

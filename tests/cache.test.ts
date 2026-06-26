@@ -5,6 +5,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { cleanupCachedFiles, listCachedFiles } from "../src/cache.js";
+import { metadataPathForDataPath } from "../src/cache-metadata.js";
 
 let tempDir: string;
 
@@ -36,7 +37,17 @@ describe("listCachedFiles", () => {
 
   it("lists cached official IBGE files with reconstructed source URLs", async () => {
     await writeCachedFile("Trabalho_e_Rendimento/Sample/A.zip", "zip");
-    await writeCachedFile("Orcamentos_Familiares/Sample/B.txt", "txt-data");
+    const bPath = await writeCachedFile("Orcamentos_Familiares/Sample/B.txt", "txt-data");
+    await writeDownloadMetadata(bPath, {
+      sourceUrl: "https://ftp.ibge.gov.br/Orcamentos_Familiares/Sample/B.txt",
+      resolvedUrl: "http://ftp.ibge.gov.br/Orcamentos_Familiares/Sample/B.txt",
+      transport: "http",
+      usedFallback: true,
+      contentLength: 8,
+      contentType: "text/plain",
+      bytesWritten: 8,
+      sha256: "abc123"
+    });
     await writeFile(path.join(tempDir, "notes.txt"), "ignored");
 
     const result = await listCachedFiles({
@@ -54,7 +65,12 @@ describe("listCachedFiles", () => {
     ]);
     expect(result.files[0]).toMatchObject({
       url: "https://ftp.ibge.gov.br/Orcamentos_Familiares/Sample/B.txt",
-      bytes: 8
+      bytes: 8,
+      resolvedUrl: "http://ftp.ibge.gov.br/Orcamentos_Familiares/Sample/B.txt",
+      transport: "http",
+      usedFallback: true,
+      sha256: "abc123",
+      downloadedAt: "2026-06-26T00:00:00.000Z"
     });
     expect(result.files[0].modifiedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
@@ -114,6 +130,16 @@ describe("cleanupCachedFiles", () => {
   it("deletes only matching cached files when dryRun is false", async () => {
     const keepPath = await writeCachedFile("A/keep.zip", "keep-this-file");
     const deletePath = await writeCachedFile("Orcamentos_Familiares/delete.zip", "delete-this-file");
+    await writeDownloadMetadata(deletePath, {
+      sourceUrl: "https://ftp.ibge.gov.br/Orcamentos_Familiares/delete.zip",
+      resolvedUrl: "http://ftp.ibge.gov.br/Orcamentos_Familiares/delete.zip",
+      transport: "http",
+      usedFallback: true,
+      contentLength: 16,
+      contentType: "application/zip",
+      bytesWritten: 16,
+      sha256: "deletehash"
+    });
     await setModifiedDaysAgo(keepPath, 60);
     await setModifiedDaysAgo(deletePath, 60);
 
@@ -135,6 +161,7 @@ describe("cleanupCachedFiles", () => {
     ]);
     await expect(stat(keepPath)).resolves.toBeDefined();
     await expect(stat(deletePath)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(stat(metadataPathForDataPath(deletePath))).rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it("requires at least one cleanup filter", async () => {
@@ -162,6 +189,30 @@ async function writeCachedFile(relativePath: string, contents: string): Promise<
   await mkdir(path.dirname(filePath), { recursive: true });
   await writeFile(filePath, contents);
   return filePath;
+}
+
+async function writeDownloadMetadata(
+  filePath: string,
+  metadata: {
+    sourceUrl: string;
+    resolvedUrl: string;
+    transport: "https" | "http";
+    usedFallback: boolean;
+    contentLength: number | null;
+    contentType: string | null;
+    bytesWritten: number;
+    sha256: string;
+  }
+): Promise<void> {
+  await writeFile(
+    metadataPathForDataPath(filePath),
+    JSON.stringify({
+      ...metadata,
+      lastModified: null,
+      etag: null,
+      downloadedAt: "2026-06-26T00:00:00.000Z"
+    })
+  );
 }
 
 async function setModifiedDaysAgo(filePath: string, daysAgo: number): Promise<void> {

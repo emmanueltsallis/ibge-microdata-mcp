@@ -48,6 +48,7 @@ describe("public repository readiness", () => {
     expect(readme).toContain("examples/generic-workflow.md");
     expect(readme).toContain("examples/harmonization-recipe.json");
     expect(readme).toContain("docs/harmonization-sources.md");
+    expect(readme).toContain("ibge_microdata_connectivity_check");
     expect(readme).toContain("ibge_microdata_validate_recipe");
     expect(readme).toContain("ibge_microdata_apply_recipe");
     expect(readme).toContain("ibge_microdata_r_status");
@@ -60,6 +61,7 @@ describe("public repository readiness", () => {
   it("registers R-backed PNADc tools in the MCP server", async () => {
     const serverSource = await readFile(path.join(projectRoot, "src", "server.ts"), "utf8");
 
+    expect(serverSource).toContain("ibge_microdata_connectivity_check");
     expect(serverSource).toContain("ibge_microdata_r_status");
     expect(serverSource).toContain("ibge_microdata_pnadc_r_download");
     expect(serverSource).toContain("ibge_microdata_datazoom_pnadc_load");
