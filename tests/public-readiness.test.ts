@@ -35,6 +35,9 @@ describe("public repository readiness", () => {
     expect(readme).toContain("git clone https://github.com/emmanueltsallis/ibge-microdata-mcp.git");
     expect(readme).toContain("R with `Rscript` available on `PATH`");
     expect(readme).toContain("brew install node r");
+    expect(readme).toContain("winget install OpenJS.NodeJS");
+    expect(readme).toContain("winget install RProject.R");
+    expect(readme).toContain("sudo apt install -y nodejs npm r-base");
     expect(readme).toContain("npm install -g pnpm@11.7.0");
     expect(readme).toContain("node --version");
     expect(readme).toContain("pnpm --version");

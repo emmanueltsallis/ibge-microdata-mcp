@@ -76,7 +76,25 @@ brew install node r
 npm install -g pnpm@11.7.0
 ```
 
-On Windows or Linux, install the same tools from their official installers:
+On Windows with winget:
+
+```powershell
+winget install OpenJS.NodeJS
+winget install RProject.R
+npm install -g pnpm@11.7.0
+```
+
+On Ubuntu/Debian:
+
+```bash
+sudo apt update
+sudo apt install -y nodejs npm r-base
+sudo npm install -g pnpm@11.7.0
+```
+
+Linux package managers sometimes ship older Node.js versions. If `node --version` is below 18.20, install a newer Node.js release from NodeSource, nvm, or the official Node.js installer.
+
+You can also install the same tools from their official installers:
 
 - Node.js: https://nodejs.org/
 - pnpm: https://pnpm.io/installation
