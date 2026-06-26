@@ -67,21 +67,44 @@ R is included as a project prerequisite because PNAD Contínua and Data Zoom wor
 
 ## Install
 
-Clone the GitHub repository:
+1. Install system runtimes.
+
+On macOS with Homebrew:
+
+```bash
+brew install node r
+npm install -g pnpm@11.7.0
+```
+
+On Windows or Linux, install the same tools from their official installers:
+
+- Node.js: https://nodejs.org/
+- pnpm: https://pnpm.io/installation
+- R: https://cran.r-project.org/
+
+Check that all three are available:
+
+```bash
+node --version
+pnpm --version
+Rscript --version
+```
+
+2. Clone the GitHub repository:
 
 ```bash
 git clone https://github.com/emmanueltsallis/ibge-microdata-mcp.git
 cd ibge-microdata-mcp
 ```
 
-Install dependencies and build the local MCP server:
+3. Install Node dependencies and build the local MCP server:
 
 ```bash
 pnpm install
 pnpm run build
 ```
 
-Install the baseline R packages used by the planned R-backed IBGE workflows:
+4. Install the baseline R packages used by the planned R-backed IBGE workflows:
 
 ```bash
 Rscript -e 'install.packages(c("PNADcIBGE", "survey", "jsonlite", "arrow"), repos = "https://cloud.r-project.org")'
