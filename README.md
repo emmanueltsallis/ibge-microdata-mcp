@@ -63,16 +63,6 @@ This MCP is a local tool. Users are expected to have:
 - pnpm.
 - R with `Rscript` available on `PATH`.
 
-Install the baseline R packages used by the planned R-backed IBGE workflows:
-
-```r
-install.packages(c("PNADcIBGE", "survey", "jsonlite", "arrow"))
-install.packages(
-  "datazoom.social",
-  repos = c("https://datazoompuc.r-universe.dev", "https://cloud.r-project.org")
-)
-```
-
 R is included as a project prerequisite because PNAD Contínua and Data Zoom workflows are best supported by the existing Brazilian R ecosystem. The MCP server itself still runs as a Node/TypeScript process and returns MCP-friendly JSON, Markdown, and local file paths.
 
 ## Install
@@ -89,6 +79,13 @@ Install dependencies and build the local MCP server:
 ```bash
 pnpm install
 pnpm run build
+```
+
+Install the baseline R packages used by the planned R-backed IBGE workflows:
+
+```bash
+Rscript -e 'install.packages(c("PNADcIBGE", "survey", "jsonlite", "arrow"), repos = "https://cloud.r-project.org")'
+Rscript -e 'install.packages("datazoom.social", repos = c("https://datazoompuc.r-universe.dev", "https://cloud.r-project.org"))'
 ```
 
 ## Run
