@@ -123,3 +123,21 @@ ibge_microdata_weighted_distribution({
   "topPercents": [0.01, 0.05, 0.1]
 })
 ```
+
+## 11. Optional Harmonization Recipe
+
+Use a recipe when assumptions should be explicit, versioned, and reusable. See [harmonization-recipe.json](harmonization-recipe.json) for the JSON structure.
+
+```text
+ibge_microdata_apply_recipe({
+  "recipePath": "/path/to/harmonization-recipe.json",
+  "views": [
+    {
+      "name": "microdata",
+      "parquetPaths": ["/Users/you/.cache/ibge-microdata-mcp/converted/sample.parquet"]
+    }
+  ],
+  "outputPath": "/Users/you/.cache/ibge-microdata-mcp/converted/harmonized.parquet",
+  "sampleRows": 5
+})
+```

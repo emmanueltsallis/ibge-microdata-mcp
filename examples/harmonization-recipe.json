@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "name": "generic_region_value",
+  "description": "Example recipe that standardizes a converted microdata view into region, sample_weight, and target_value columns.",
+  "sources": [
+    {
+      "label": "Official IBGE dictionary or input layout used to choose variables"
+    }
+  ],
+  "requiredViews": [
+    {
+      "name": "microdata",
+      "columns": ["region", "sample_weight", "raw_value"]
+    }
+  ],
+  "output": {
+    "viewName": "harmonized_microdata",
+    "sql": "select region, cast(sample_weight as double) as sample_weight, cast(raw_value as double) as target_value from microdata"
+  },
+  "validations": [
+    {
+      "name": "non_empty_output",
+      "sql": "select count(*) as row_count from harmonized_microdata",
+      "expect": {
+        "column": "row_count",
+        "equals": 1
+      }
+    }
+  ]
+}

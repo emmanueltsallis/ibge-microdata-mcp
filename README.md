@@ -39,6 +39,7 @@ In plain terms:
 | `ibge_microdata_weighted_distribution` | Calculate weighted totals, means, group shares, and top-bracket shares over local Parquet views. |
 | `ibge_microdata_describe_parquet_views` | Inspect schemas, row counts, and sample rows for named Parquet views. |
 | `ibge_microdata_profile_parquet_views` | Profile local Parquet views with row counts, null counts, numeric ranges, frequent values, and samples. |
+| `ibge_microdata_apply_recipe` | Apply a versioned JSON harmonization recipe and write a derived Parquet file. |
 
 The generic path is discovery, caching, layout inspection, Parquet conversion, profiling, and DuckDB querying. These tools are the main public surface of the server.
 
@@ -88,7 +89,7 @@ Example MCP client config:
 }
 ```
 
-For a shorter generic walkthrough, see [examples/generic-workflow.md](examples/generic-workflow.md).
+For a shorter generic walkthrough, see [examples/generic-workflow.md](examples/generic-workflow.md). For a starter harmonization recipe, see [examples/harmonization-recipe.json](examples/harmonization-recipe.json).
 
 ## Generic Workflow
 
@@ -213,6 +214,26 @@ ibge_microdata_query_parquet({
 ```
 
 The query tools accept only `SELECT` or `WITH` queries, reject semicolons and write-oriented keywords, and cap returned rows.
+
+## Harmonization Recipes
+
+Recipes are optional JSON files that make harmonization assumptions explicit and reusable. The MCP does not ship one universal harmonization standard; instead, a recipe declares the required input views/columns, an output `SELECT` transformation, optional source references, and validation checks.
+
+```text
+ibge_microdata_apply_recipe({
+  "recipePath": "/path/to/harmonization-recipe.json",
+  "views": [
+    {
+      "name": "microdata",
+      "parquetPaths": ["/Users/you/.cache/ibge-microdata-mcp/converted/sample.parquet"]
+    }
+  ],
+  "outputPath": "/Users/you/.cache/ibge-microdata-mcp/converted/harmonized.parquet",
+  "sampleRows": 5
+})
+```
+
+Recipe SQL accepts only `SELECT` or `WITH` statements. The tool validates required columns, runs recipe validations, and writes the harmonized output only when validations pass.
 
 ## Weighted Distributions
 

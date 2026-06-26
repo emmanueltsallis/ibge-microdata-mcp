@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as XLSX from "xlsx";
 
 import {
+  applyHarmonizationRecipeTool,
   cleanupCachedFilesTool,
   describeParquetViewsTool,
   discoverMicrodataTool,
@@ -550,6 +551,63 @@ describe("profileParquetViewsTool", () => {
     });
     expect(result.markdown).toContain("Parquet View Profile");
     expect(result.markdown).toContain("target_value");
+  });
+});
+
+describe("applyHarmonizationRecipeTool", () => {
+  it("wraps a portable harmonization recipe for MCP-friendly output", async () => {
+    const layoutPath = path.join(tempDir, "recipe-input.txt");
+    const dataPath = path.join(tempDir, "recipe-data.txt");
+    const parquetPath = path.join(tempDir, "recipe-raw.parquet");
+    const recipePath = path.join(tempDir, "recipe.json");
+    const outputPath = path.join(tempDir, "recipe-output.parquet");
+    await writeFile(
+      layoutPath,
+      `
+@0001 region        $2.   /* Region */
+@0003 sample_weight 3.    /* Sample weight */
+@0006 raw_value     4.    /* Raw value */
+`
+    );
+    await writeFile(dataPath, ["330801000", "350103000"].join("\n"));
+    await fixedWidthFileToParquetTool({ layoutPath, dataPath, outputPath: parquetPath });
+    await writeFile(
+      recipePath,
+      JSON.stringify(
+        {
+          schemaVersion: 1,
+          name: "generic_test_recipe",
+          requiredViews: [{ name: "microdata", columns: ["region", "sample_weight", "raw_value"] }],
+          output: {
+            viewName: "harmonized_microdata",
+            sql: "select region, sample_weight, raw_value as target_value from microdata"
+          },
+          validations: [
+            {
+              name: "row_count",
+              sql: "select count(*) as rows_checked from harmonized_microdata",
+              expect: { column: "rows_checked", equals: 2 }
+            }
+          ]
+        },
+        null,
+        2
+      )
+    );
+
+    const result = await applyHarmonizationRecipeTool({
+      recipePath,
+      views: [{ name: "microdata", parquetPaths: [parquetPath] }],
+      outputPath,
+      sampleRows: 1
+    });
+
+    expect(result.structured.recipe.name).toBe("generic_test_recipe");
+    expect(result.structured.outputRows).toBe(2);
+    expect(result.structured.validationsPassed).toBe(true);
+    expect(result.structured.sampleRows).toEqual([{ region: "33", sample_weight: 80, target_value: 1000 }]);
+    expect(result.markdown).toContain("Applied Harmonization Recipe");
+    expect(result.markdown).toContain("generic_test_recipe");
   });
 });
 

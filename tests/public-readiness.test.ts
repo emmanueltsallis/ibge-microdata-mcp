@@ -28,10 +28,13 @@ describe("public repository readiness", () => {
   it("ships license and generic example docs for public users", async () => {
     await expect(access(path.join(projectRoot, "LICENSE"))).resolves.toBeUndefined();
     await expect(access(path.join(projectRoot, "examples", "generic-workflow.md"))).resolves.toBeUndefined();
+    await expect(access(path.join(projectRoot, "examples", "harmonization-recipe.json"))).resolves.toBeUndefined();
 
     const readme = await readFile(path.join(projectRoot, "README.md"), "utf8");
     expect(readme).toContain("git clone https://github.com/emmanueltsallis/ibge-microdata-mcp.git");
     expect(readme).toContain("examples/generic-workflow.md");
+    expect(readme).toContain("examples/harmonization-recipe.json");
+    expect(readme).toContain("ibge_microdata_apply_recipe");
     expect(readme).toContain("License");
   });
 });

@@ -3,6 +3,7 @@ import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import {
+  applyHarmonizationRecipeTool,
   cleanupCachedFilesTool,
   describeParquetViewsTool,
   discoverMicrodataTool,
@@ -391,6 +392,35 @@ const profileParquetViewsSchema = z.object({
     .describe("Number of sample rows to return per view. Defaults to 0 and is capped at 100."),
 });
 
+const applyRecipeSchema = z.object({
+  recipePath: z
+    .string()
+    .min(1)
+    .describe("Local path to a JSON harmonization recipe file."),
+  views: z
+    .array(parquetViewSchema)
+    .min(1)
+    .describe("Named local Parquet views referenced by the recipe."),
+  outputPath: z
+    .string()
+    .min(1)
+    .describe("Local destination path for the harmonized Parquet output."),
+  sampleRows: z
+    .number()
+    .int()
+    .min(0)
+    .max(100)
+    .optional()
+    .describe("Number of sample output rows to return. Defaults to 0 and is capped at 100."),
+  maxValidationRows: z
+    .number()
+    .int()
+    .positive()
+    .max(100)
+    .optional()
+    .describe("Maximum rows returned by each validation query. Defaults to 25 and is capped at 100."),
+});
+
 const weightedDistributionSchema = z.object({
   views: z
     .array(parquetViewSchema)
@@ -750,6 +780,19 @@ Use this after converting IBGE fixed-width microdata to Parquet and before writi
       annotations: READ_ONLY,
     },
     async (args) => toMcpResult(await profileParquetViewsTool(args))
+  );
+
+  server.registerTool(
+    "ibge_microdata_apply_recipe",
+    {
+      title: "Apply IBGE Harmonization Recipe",
+      description: `Apply a local JSON harmonization recipe to named local IBGE Parquet views and write a new Parquet output.
+
+Recipes are an optional layer above the generic workflow. They declare required input views/columns, an output SELECT/WITH transformation, optional sources, and validation queries. Use this when harmonization assumptions should be explicit, versioned, and reproducible instead of hardcoded into the MCP server.`,
+      inputSchema: applyRecipeSchema.shape,
+      annotations: LOCAL_WRITE,
+    },
+    async (args) => toMcpResult(await applyHarmonizationRecipeTool(args))
   );
 
   server.registerTool(

@@ -26,6 +26,11 @@ import { inspectLayout, type InspectLayoutOutput } from "./layout-inspect.js";
 import { summarizePnadcTextFile, type SummarizePnadcTextFileOutput } from "./pnadc-file.js";
 import { summarizePnadcZipFile, type SummarizePnadcZipFileOutput } from "./pnadc-zip.js";
 import {
+  applyHarmonizationRecipe,
+  type ApplyHarmonizationRecipeInput,
+  type ApplyHarmonizationRecipeOutput,
+} from "./recipe.js";
+import {
   exportPofZipRecordToParquet,
   readPofDictionaryManifest,
   type PofDictionaryManifest,
@@ -198,6 +203,8 @@ export interface DescribeParquetViewsToolInput {
 export type ProfileParquetViewsToolInput = ProfileParquetViewsInput;
 
 export type WeightedDistributionToolInput = WeightedDistributionInput;
+
+export type ApplyHarmonizationRecipeToolInput = ApplyHarmonizationRecipeInput;
 
 export interface PofDictionaryManifestToolInput {
   dictionaryPath: string;
@@ -461,6 +468,16 @@ export async function profileParquetViewsTool(
   const result = await profileParquetViews(input);
   return {
     markdown: formatParquetViewProfileMarkdown(result),
+    structured: result,
+  };
+}
+
+export async function applyHarmonizationRecipeTool(
+  input: ApplyHarmonizationRecipeToolInput
+): Promise<ToolResult<ApplyHarmonizationRecipeOutput>> {
+  const result = await applyHarmonizationRecipe(input);
+  return {
+    markdown: formatHarmonizationRecipeMarkdown(result),
     structured: result,
   };
 }
@@ -751,6 +768,38 @@ function formatParquetViewProfileMarkdown(result: ProfileParquetViewsOutput): st
       lines.push("", "Sample:", "```json", JSON.stringify(view.sampleRows, null, 2), "```");
     }
     lines.push("");
+  }
+
+  return lines.join("\n");
+}
+
+function formatHarmonizationRecipeMarkdown(result: ApplyHarmonizationRecipeOutput): string {
+  const lines = [
+    "# Applied Harmonization Recipe",
+    "",
+    `Recipe: ${result.recipe.name}`,
+    `Recipe path: ${result.recipePath}`,
+    `Output path: ${result.outputPath}`,
+    `Output view: ${result.outputViewName}`,
+    `Output rows: ${result.outputRows}`,
+    `Validations passed: ${result.validationsPassed ? "yes" : "no"}`,
+    "",
+    "Columns:",
+  ];
+
+  for (const column of result.outputColumns) {
+    lines.push(`- ${column.name}: ${column.type}`);
+  }
+
+  if (result.validations.length > 0) {
+    lines.push("", "Validations:");
+    for (const validation of result.validations) {
+      lines.push(`- ${validation.name}: ${validation.passed ? "passed" : "failed"}`);
+    }
+  }
+
+  if (result.sampleRows.length > 0) {
+    lines.push("", "Sample:", "```json", JSON.stringify(result.sampleRows, null, 2), "```");
   }
 
   return lines.join("\n");
